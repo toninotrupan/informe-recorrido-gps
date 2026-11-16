@@ -117,8 +117,8 @@ details[open] summary{margin-bottom:10px}
 .sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding:6pt 8pt;border-left:3pt solid var(--rp-blue);background:var(--rp-zebra);font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
 .sheet .src img{height:24pt;width:auto;flex:none}
 .itin .info.gps{color:#1f5f8b}
-.sheet .sign{width:200pt;margin:26pt 0 0 auto;text-align:center;break-inside:avoid}
-.sheet .sign .sigimg{height:46pt;display:flex;align-items:flex-end;justify-content:center}
+.sheet .sign{width:190pt;margin:18pt 6pt 0 auto;text-align:center;break-inside:avoid}
+.sheet .sign .sigimg{height:34pt;display:flex;align-items:flex-end;justify-content:center}
 .sheet .sign .sigimg img{max-height:46pt;max-width:180pt}
 .sheet .sign .sigline{border-top:0.8pt solid var(--rp-blue);margin:2pt 0 4pt}
 .sheet .sign .signame{font-size:9pt;line-height:1.35;color:var(--rp-blue);font-weight:400}
@@ -210,9 +210,9 @@ details[open] summary{margin-bottom:10px}
       <div class="tabs" id="tabs"></div>
       <div class="grid2">
         <label class="f">Patente<input id="plName" placeholder="SJDR-78"></label>
-        <label class="f">Código del tracto<input id="plCode" placeholder="CK93"></label>
+        <label class="f" hidden>Código del tracto<input id="plCode" placeholder="CK93"></label>
       </div>
-      <p class="hint">La patente y el código se pueden cambiar y el informe sale con lo que escribas. Si los datos vienen de un archivo de GPS Chile de otra patente, el informe lo indica en la línea de fuente.</p>
+      <p class="hint">La patente se puede cambiar y el informe sale con lo que escribas. Si los datos vienen de un archivo de GPS Chile de otra patente, el informe lo indica en la línea de fuente.</p>
       <div class="row" style="background:var(--ui-accent-soft);border-radius:8px;padding:10px">
         <button class="btn primary" id="btnImport" type="button">Importar ruta desde PDF o Excel</button>
         <button class="btn" id="btnUndoImport" type="button" hidden>Deshacer importación</button>
@@ -861,7 +861,7 @@ async function generate(){
   // numeración "Página x de n" por informe
   results.forEach((r, i) => { const shs = [...$("report").querySelectorAll(`.sheet[data-rep="${i}"]`)]; shs.forEach((sh, k) => { const pg = sh.querySelector(".foot .pg"); if(pg) pg.textContent = `Página ${k+1} de ${shs.length}`; }); });
   const r0 = results[0];
-  document.title = results.length === 1 ? `Recorrido ${r0.p.code ? r0.p.code + " " : ""}${r0.p.name} ${r0.periodTag}` : `Recorrido ${results.map(r => r.p.name).join(" ")} ${r0.periodTag}`;
+  document.title = results.length === 1 ? `Recorrido ${r0.p.name} ${r0.periodTag}` : `Recorrido ${results.map(r => r.p.name).join(" ")} ${r0.periodTag}`;
   setStatus(errors.length ? "Informe generado con avisos: " + errors.join(" ") : "Informe generado. Revisa la vista previa y usa \"Imprimir / Guardar PDF\".", errors.length > 0);
 }
 
@@ -875,7 +875,11 @@ function renderReport(r){
   const an = analyze(r, from, to);
   const code = r.p.code || r.p.name, name = r.p.name || "";
   const gen = cfg.gen ? fDate(parseDT(cfg.gen)) : fDate(new Date());
-  const foot = cfg.company ? `${cfg.company} · Recorrido ${code}, ${periodShort(from, to)}` : "";
+  // pie: empresa · fuente (solo dice GPS Chile si los viajes vienen de GPS Chile) · período
+  const vtr = r.trips.filter(t => t.end >= from && t.start <= to), ng = vtr.filter(t => t.gps).length;
+  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : ng ? "Fuente: GPS Chile y datos ingresados manualmente" : "Fuente: datos ingresados manualmente (estimados)";
+  const foot = [cfg.company, srcFoot, periodShort(from, to)].filter(Boolean).join(" · ");
+  const now = new Date(), genT = `${gen} · ${p2(now.getHours())}:${p2(now.getMinutes())} h`; // fecha y hora de creación
   const CE = 'contenteditable="true" spellcheck="false"';
   hdrGps = r.trips.some(t => t.gps);
 
@@ -889,11 +893,11 @@ function renderReport(r){
   const omitTxt = omit.length ? ` Días sin viajes (no se muestran): ${omit.map(s => dm(s.d)).join(", ")}.` : "";
   const sumRows = [["Kilómetros recorridos", Math.round(T.km)], ["Horas de motor", dec1(T.motor)], ["Horas en movimiento", dec1(T.mov)],
     ["Horas en ralentí (motor encendido detenido)", dec1(T.idle)], ["Velocidad máxima", Math.round(T.vmax) + " km/h"], ["Días con viaje", T.days]];
-  b1.innerHTML = `<h1 class="title" ${CE}>Recorrido tracto ${esc(code)} · Patente ${esc(name)}</h1>
-    <p class="sub" ${CE}>Período: ${periodLong(from, to)} · Emitido el ${gen}</p>
+  b1.innerHTML = `<h1 class="title" ${CE}>Informe de recorrido · Patente ${esc(name)}</h1>
+    <p class="sub" ${CE}>Período: ${periodLong(from, to)} · Documento creado el ${genT}</p>
     <h2 class="sec" style="margin-top:13pt" ${CE}>Resumen</h2>
     <table class="t sum" style="width:424pt;margin:8pt 0 0 37.5pt" ${CE}><colgroup><col style="width:281.6pt"><col style="width:142.4pt"></colgroup>
-      <thead><tr><th>Dato</th><th class="r">${esc(code)}</th></tr></thead>
+      <thead><tr><th>Dato</th><th class="r">${esc(name || code)}</th></tr></thead>
       <tbody>${sumRows.map(x => `<tr><td>${x[0]}</td><td class="r">${x[1]}</td></tr>`).join("")}</tbody></table>
     <p class="txt" style="margin-top:20pt" ${CE}>${esc(routeSummary(an, from))}</p>
     <h2 class="sec" style="margin-top:20pt" ${CE}>Kilómetros por día</h2>
@@ -938,7 +942,7 @@ function renderReport(r){
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Viajes de más de 20 km</h2>`},
     {table:true, keepWith:true, width:W, cols:[62.4,62.4,147.2,146.4,34.4,42.2],
       head:`<tr><th>Sale</th><th>Llega</th><th>Desde</th><th>Hasta</th><th class="r">Km</th><th class="r">Vel.<br>máx.</th></tr>`, rows: vRows.length ? vRows : [`<tr><td colspan="6">Sin viajes de más de 20 km.</td></tr>`]},
-    ...(cfg.sigShow !== false && (cfg.signer || cfg.sig) ? [{html:`<div class="sign"><div class="sigimg">${cfg.sig ? `<img src="${cfg.sig}" alt="">` : ""}</div><div class="sigline"></div><div class="signame" ${CE}>${esc(cfg.signer || "").replace(/\n/g, "<br>")}</div><div class="sigdate" ${CE}>Emitido el ${gen}</div></div>`}] : [])
+    ...(cfg.sigShow !== false && (cfg.signer || cfg.sig) ? [{html:`<div class="sign"><div class="sigimg">${cfg.sig ? `<img src="${cfg.sig}" alt="">` : ""}</div><div class="sigline"></div><div class="signame" ${CE}>${esc(cfg.signer || "").replace(/\n/g, "<br>")}</div><div class="sigdate" ${CE}>Fecha: ${gen}<br>Hora: ${genT.split("· ")[1]}</div></div>`}] : [])
   ];
   flow(blocks, {left:58.5, top:106, width:500, height:636}, {left:58.5, top:104, width:500, height:638}, {first:{bars:true, logo:true, foot}, cont:{foot}});
   // contenteditable en tablas generadas
