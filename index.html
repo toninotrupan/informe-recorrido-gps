@@ -1187,7 +1187,7 @@ function recordsToPlates(recs, yearHint, gps, fileName){
     const clean = s => String(s || "").replace(/\s+/g," ").trim().replace(/[,;]+$/,"");
     const rows = items.map((r, i) => {
       const row = {d:r.d, t:r.t, place: clean(r.from || (i > 0 ? items[i-1].to : "")), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta: timeOnly(r.end)};
-      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; if(gps === "part") row.part = 1; if(g.name) row.gpsPlate = g.name; }
+      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; if(gps === "part") row.part = 1; if(g.name) row.gpsPlate = g.name; } else { if(r.km) row.km = r.km; if(r.vmax) row.vmax = r.vmax; } // sin GPS: km y velocidad quedan como datos manuales
       return row;
     });
     if(!hasTo) undated.forEach(r => rows.push({d:"", t:"", place:clean(r.from), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta:""}));
