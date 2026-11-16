@@ -93,7 +93,9 @@ details[open] summary{margin-bottom:10px}
 .sheet .box{position:absolute;overflow:hidden}
 .sheet .bars{position:absolute;left:556pt;top:0;width:20pt}
 .sheet .bars i{display:block}
-.sheet .logo{position:absolute;left:60pt;top:41.6pt;height:30.4pt}
+.sheet .hdr{position:absolute;left:60pt;top:41.6pt;height:30.4pt;display:flex;align-items:center;gap:16pt}
+.sheet .hdr img{height:30.4pt;width:auto;display:block}
+.sheet .hdr img.gps{height:26pt}
 .sheet .foot{position:absolute;left:0;right:0;top:744pt;text-align:center;font-size:7pt;color:var(--rp-sub)}
 .sheet h1.title{font-size:18pt;font-weight:300;color:var(--rp-blue);margin:0;line-height:1.15;text-transform:uppercase;letter-spacing:0}
 .sheet p.sub{font-size:9pt;color:var(--rp-sub);margin:5pt 0 0}
@@ -168,9 +170,12 @@ details[open] summary{margin-bottom:10px}
           <div class="row"><img id="gpsLogoPrev" class="logoprev" alt="Logo GPS Chile"><button class="btn" id="btnGpsLogo" type="button">Cambiar</button><button class="btn" id="btnGpsLogoReset" type="button">Original</button></div>
           <input type="file" id="fileGpsLogo" accept="image/*" hidden>
         </div>
-        <label class="check" style="align-self:end"><input type="checkbox" id="cfgGpsShow"> Mostrar el logo GPS Chile y citar a GPS Chile como fuente</label>
+        <div style="display:flex;flex-direction:column;gap:6px;align-self:end">
+          <label class="check"><input type="checkbox" id="cfgLgoShow"> Logo de la empresa en el encabezado</label>
+          <label class="check"><input type="checkbox" id="cfgGpsShow"> Logo GPS Chile en el encabezado</label>
+        </div>
       </div>
-      <p class="hint">GPS Chile se cita como fuente solo para los viajes importados desde un archivo exportado por GPS Chile (con sus horas, km y velocidad máxima reales). Si el itinerario se ingresó a mano o se modificó, el informe dice que esos datos son estimados.</p>
+      <p class="hint">El logo GPS Chile aparece solo en informes con viajes importados desde GPS Chile. GPS Chile se cita como fuente solo para los viajes importados desde un archivo exportado por GPS Chile (con sus horas, km y velocidad máxima reales). Si el itinerario se ingresó a mano o se modificó, el informe dice que esos datos son estimados.</p>
       <details>
         <summary>Ajustes del cálculo aproximado</summary>
         <div class="grid3">
@@ -244,7 +249,7 @@ const todayISO = () => { const d = new Date(); return d.getFullYear()+"-"+p2(d.g
 
 function sampleState(){
   return {
-    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, factor:1.25, cap:90, country:"cl", addr:false},
+    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, lgoShow:true, factor:1.25, cap:90, country:"cl", addr:false},
     active:0, report:"active",
     plates:[
       {name:"SJDR-78", code:"CK93", rows:[
@@ -286,9 +291,10 @@ function loadCfg(){
   for(const [id,k] of Object.entries(cfgFields)) $(id).value = S.cfg[k] ?? "";
   $("cfgAddr").checked = !!S.cfg.addr;
   const src = logoSrc(); $("logoPrev").hidden = !src; if(src) $("logoPrev").src = src;
-  $("gpsLogoPrev").src = gpsLogoSrc(); $("cfgGpsShow").checked = S.cfg.gpsShow !== false;
+  $("gpsLogoPrev").src = gpsLogoSrc(); $("cfgGpsShow").checked = S.cfg.gpsShow !== false; $("cfgLgoShow").checked = S.cfg.lgoShow !== false;
 }
 $("cfgGpsShow").addEventListener("change", e => { S.cfg.gpsShow = e.target.checked; save(); });
+$("cfgLgoShow").addEventListener("change", e => { S.cfg.lgoShow = e.target.checked; save(); });
 $("btnGpsLogo").onclick = () => $("fileGpsLogo").click();
 $("btnGpsLogoReset").onclick = () => { S.cfg.gpsLogo = null; save(); loadCfg(); };
 $("fileGpsLogo").onchange = e => {
@@ -761,11 +767,13 @@ function stagesOf(an, r){
 
 /* ---------- Armado de hojas (paginación manual, tamaño carta) ---------- */
 const PT = 4/3; // px por pt en pantalla
-let maps = [];
+let maps = [], hdrGps = false;
 function newSheet(opts){
   const sh = document.createElement("section"); sh.className = "sheet";
   if(opts.bars) sh.insertAdjacentHTML("beforeend", `<div class="bars"><i style="height:28pt;background:var(--rp-blue)"></i><i style="height:24pt;background:var(--rp-blue2)"></i><i style="height:28pt;background:var(--rp-blue3)"></i></div>`);
-  if(opts.logo && logoSrc()) sh.insertAdjacentHTML("beforeend", `<img class="logo" src="${logoSrc()}" alt="">`);
+  // encabezado: logo de la empresa y logo GPS Chile (este último solo si el informe usa datos de GPS Chile)
+  const lg = S.cfg.lgoShow !== false && logoSrc(), gl = S.cfg.gpsShow !== false && hdrGps;
+  if(lg || gl) sh.insertAdjacentHTML("beforeend", `<div class="hdr">${lg ? `<img src="${logoSrc()}" alt="">` : ""}${gl ? `<img class="gps" src="${gpsLogoSrc()}" alt="GPS Chile">` : ""}</div>`);
   if(opts.foot) sh.insertAdjacentHTML("beforeend", `<div class="foot">${esc(opts.foot)}</div>`);
   $("report").appendChild(sh); return sh;
 }
@@ -837,6 +845,7 @@ function renderReport(r){
   const gen = cfg.gen ? fDate(parseDT(cfg.gen)) : fDate(new Date());
   const foot = cfg.company ? `${cfg.company} · Recorrido ${code}, ${periodShort(from, to)}` : "";
   const CE = 'contenteditable="true" spellcheck="false"';
+  hdrGps = r.trips.some(t => t.gps);
 
   /* Hoja 1: resumen y kilómetros por día */
   const s1 = newSheet({foot});
@@ -903,20 +912,20 @@ function sourceHTML(r, an){
   const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : (g.length ? " La exportación GPS no incluye horas de ralentí." : "");
   let txt, logo = false;
   const part = g.some(t => t.part);
-  if(cfg.gpsShow !== false && g.length && g.length === vt.length && part){
+  if(g.length && g.length === vt.length && part){
     txt = `Fuente de información: GPS Chile, extracto de los viajes registrados por la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas de esos viajes según GPS Chile. El extracto no incluye los viajes cortos, por lo que los kilómetros y horas pueden ser menores que el total de la plataforma; el trazado del mapa es aproximado.${idleTxt}`;
     logo = true;
-  } else if(cfg.gpsShow !== false && g.length && g.length === vt.length){
+  } else if(g.length && g.length === vt.length){
     txt = `Fuente de información: GPS Chile, informe de viajes exportado desde la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas según GPS Chile; el trazado del mapa es aproximado entre las posiciones registradas.${idleTxt}`;
     logo = true;
-  } else if(cfg.gpsShow !== false && g.length){
+  } else if(g.length){
     txt = `Fuente de información: ${g.length} de ${vt.length} viajes según GPS Chile${fileTxt}. Los demás viajes se ingresaron o modificaron manualmente y sus distancias, horarios y velocidades son estimados.${idleTxt}`;
   } else if(g.length){
     txt = `Fuente de información: ${g.length === vt.length ? "" : g.length + " de " + vt.length + " viajes según "}exportación de plataforma GPS${fileTxt}${g.length === vt.length ? "" : "; los demás son estimados"}.${idleTxt}`;
   } else {
     txt = `Fuente de información: itinerario ingresado manualmente; distancias, horarios y velocidades estimados con rutas de OpenStreetMap${vt.some(t => t.vManual) ? " o ingresados a mano" : ""}.${idleTxt}`;
   }
-  return `<div class="src">${logo ? `<img src="${gpsLogoSrc()}" alt="GPS Chile">` : ""}<span>${esc(txt)}</span></div>`;
+  return `<div class="src"><span>${esc(txt)}</span></div>`;
 }
 function chartSVG(stat){
   const W = 448, Hh = 175, left = 34, top = 6, plotH = 120, base = top + plotH;
