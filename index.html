@@ -59,6 +59,7 @@ a.btn{text-decoration:none;color:var(--ui-accent)}
 .itin input[type=time]{min-width:94px}
 .itin input.place{min-width:170px}
 .itin input.idle{width:62px}
+.itin input.vmax{width:58px}
 .itin .x{border:0;background:none;color:var(--ui-muted);cursor:pointer;font-size:16px;padding:4px 6px}
 .itin .x:hover{color:var(--ui-bad)}
 .itin .info{font-size:11.5px;color:var(--ui-muted);margin-top:3px;line-height:1.3}
@@ -193,7 +194,7 @@ details[open] summary{margin-bottom:10px}
       <p class="hint">Cada fila es una salida: el camión sale del <b>lugar</b> en la <b>fecha y hora</b> indicadas y va al lugar de la fila siguiente. La última fila es el destino final; su fecha y hora son opcionales (si las dejas vacías, se queda ahí hasta el fin del periodo). <b>Llegada</b> es la hora real de llegada al lugar siguiente (opcional; si la dejas vacía se calcula con la ruta). <b>Ralentí h</b> son las horas con motor encendido detenido en ese lugar (opcional). Escribe el lugar como quieres que aparezca en el informe, por ejemplo "Mejillones (sector Puerto Angamos)".</p>
       <div class="itin-wrap">
         <table class="itin">
-          <thead><tr><th>#</th><th>Fecha</th><th>Hora salida</th><th>Lugar</th><th>Llegada</th><th>Ralentí h</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>Fecha</th><th>Hora salida</th><th>Lugar</th><th>Llegada</th><th title="Velocidad máxima del viaje a la fila siguiente; vacía = se calcula">Vel. máx</th><th>Ralentí h</th><th></th></tr></thead>
           <tbody id="itinBody"></tbody>
         </table>
       </div>
@@ -256,7 +257,7 @@ function normalizeState(){
   const d = sampleState().cfg;
   S.cfg = Object.assign({}, d, S.cfg || {});
   if(!S.cfg.company || S.cfg.company === "T&G Vecchtelligence") S.cfg.company = "LGO Operadores Logísticos";
-  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; } return o; })}));
+  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.vmax) o.vmax = r.vmax; if(r.km) o.km = r.km; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; } return o; })}));
   if(S.active == null || S.active >= S.plates.length) S.active = 0;
   if(!S.report) S.report = "active";
 }
@@ -334,12 +335,14 @@ function renderPlate(){
       <td><input class="place" data-k="place" value="${esc(r.place)}" placeholder="${last?'Destino final':'Lugar de salida'}" aria-label="Lugar fila ${i+1}">
           ${info?`<div class="info ${info.cls}">${esc(info.text)}</div>`:(last?'<div class="info">Destino final</div>':'')}</td>
       <td>${last?'':`<input type="time" step="1" data-k="ta" value="${esc(r.ta)}" title="Hora de llegada al lugar siguiente (opcional; si la dejas vacía se calcula)" aria-label="Hora llegada fila ${i+1}">`}</td>
+      <td>${last?'':`<input class="vmax" type="number" step="1" min="0" max="200" data-k="vmax" value="${esc(r.vmax)}" placeholder="auto" title="Velocidad máxima (km/h) del viaje a la fila siguiente. Vacía = se calcula o se toma del GPS." aria-label="Velocidad máxima fila ${i+1}">`}</td>
       <td><input class="idle" type="number" step="0.1" min="0" data-k="idle" value="${esc(r.idle)}" aria-label="Horas de ralentí fila ${i+1}"></td>
       <td><button class="x" type="button" title="Quitar fila" aria-label="Quitar fila ${i+1}">×</button></td>`;
     tr.querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => {
       r[inp.dataset.k] = inp.value; delete rowInfo[S.active+"|"+i];
       // un dato modificado a mano deja de ser dato GPS (y el viaje que llega a este lugar también)
-      if(inp.dataset.k !== "idle"){ const un = x => { if(x && x.src){ delete x.src; delete x.km; delete x.vmax; delete x.file; } }; un(r); if(inp.dataset.k === "place") un(p.rows[i-1]); }
+      if(inp.dataset.k === "vmax"){ if(r.src){ delete r.src; delete r.file; delete r.part; } r.vmax = inp.value; } // la km del GPS se mantiene, pero el viaje pasa a ser dato manual
+      else if(inp.dataset.k !== "idle"){ const un = x => { if(x && x.src){ delete x.src; delete x.km; delete x.vmax; delete x.file; delete x.part; } }; un(r); if(inp.dataset.k === "place") un(p.rows[i-1]); }
       save(); if(inp.dataset.k==="place") updateGmaps();
     }));
     tr.querySelector("input.place").addEventListener("change", refreshPickMap);
@@ -659,8 +662,10 @@ async function computePlate(pi){
       continue;
     }
     if(rt.approx) routeNetFail = true;
-    const vmax = Math.max(rt.km/((end-A.dep)/H || 1), Math.min(cfg.cap || 90, rt.vmax / (cfg.factor || 1) + 6));
-    trips.push({start:A.dep, end, from:A.label, to:B.label, km:rt.km, vmax:Math.min(vmax, cfg.cap||90), geom:rt.geom, a:A, b:B, gps:false, taManual:!!A.row.ta});
+    const km = gkm > 0 ? gkm : rt.km; // km conservada de un viaje GPS cuya velocidad se modificó
+    let vmax = Math.min(cfg.cap || 90, Math.max(km/((end-A.dep)/H || 1), Math.min(cfg.cap || 90, rt.vmax / (cfg.factor || 1) + 6)));
+    if(gv > 0) vmax = gv; // velocidad ingresada a mano
+    trips.push({start:A.dep, end, from:A.label, to:B.label, km, vmax, geom:rt.geom, a:A, b:B, gps:false, taManual:!!A.row.ta, vManual: gv > 0});
     if(B.dep && B.dep < end){ rowInfo[pi+"|"+B.i] = {cls:"bad", text:`La salida (${hm(B.dep)}) es antes de la llegada estimada (${dmhm(end)}).`}; errors.push(`${tag}: fila ${B.i+1} sale antes de la llegada estimada ${dmhm(end)}.`); }
   }
   return {p, pts, trips, errors};
@@ -902,7 +907,7 @@ function sourceHTML(r, an){
   } else if(g.length){
     txt = `Fuente de información: ${g.length === vt.length ? "" : g.length + " de " + vt.length + " viajes según "}exportación de plataforma GPS${fileTxt}${g.length === vt.length ? "" : "; los demás son estimados"}.${idleTxt}`;
   } else {
-    txt = `Fuente de información: itinerario ingresado manualmente; distancias, horarios y velocidades estimados con rutas de OpenStreetMap.${idleTxt}`;
+    txt = `Fuente de información: itinerario ingresado manualmente; distancias, horarios y velocidades estimados con rutas de OpenStreetMap${vt.some(t => t.vManual) ? " o ingresados a mano" : ""}.${idleTxt}`;
   }
   return `<div class="src">${logo ? `<img src="${gpsLogoSrc()}" alt="GPS Chile">` : ""}<span>${esc(txt)}</span></div>`;
 }
