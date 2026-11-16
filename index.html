@@ -961,13 +961,15 @@ function drawRouteMap(el, r, an, from, to){
   maps.push(map);
   const trips = r.trips.filter(t => t.end >= from && t.start <= to);
   const stopPts = an.stops.map(st => st.pt.g);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", {maxZoom:18, subdomains:"abcd", crossOrigin:true}).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:18, crossOrigin:true}).addTo(map);
   const bounds = L.latLngBounds([]);
   trips.forEach(t => { L.polyline(t.geom, {color:"#0d6aa6", weight:2.6, opacity:1, lineJoin:"round"}).addTo(map); t.geom.forEach(c => bounds.extend(c)); });
   // lugares con detenciones y sus fechas
   const places = new Map();
   for(const st of an.stops){
-    const k = st.pt.g.lat.toFixed(3) + "," + st.pt.g.lon.toFixed(3);
+    // lugares a menos de 8 km se juntan en una sola etiqueta para que no se encimen
+    let k = st.pt.g.lat.toFixed(3) + "," + st.pt.g.lon.toFixed(3);
+    for(const [k2, P2] of places) if(hav(P2.g, st.pt.g) < 8){ k = k2; break; }
     if(!places.has(k)) places.set(k, {g:st.pt.g, name:shortName(st.loc), days:new Set()});
     const P = places.get(k);
     for(const s of an.stat) if(ov(st.start, st.end, s.ds, s.de) > 0) P.days.add(s.ds);
