@@ -593,8 +593,9 @@ async function reverseAny(lat, lon){
   try{ const j = await getJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&limit=1`); if(j.features && j.features.length) return fmtPhoton(j.features[0].properties); }catch(e){ geoNetFail = true; }
   return gazNearest(lat, lon);
 }
-async function searchNominatim(place, country){
-  const j = await nominatim(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&q=${encodeURIComponent(place)}` + (country ? `&countrycodes=${country}` : ""));
+async function searchNominatim(place, country, box){
+  const vb = box ? `&bounded=1&viewbox=${box.map(v => v.toFixed(4)).join(",")}` : "";
+  const j = await nominatim(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&q=${encodeURIComponent(place)}` + (country ? `&countrycodes=${country}` : "") + vb);
   if(!j || !j.length) return null;
   const h = j[0], lat = parseFloat(h.lat), lon = parseFloat(h.lon);
   let addr = fmtAddress(h.address, h.name);
@@ -610,8 +611,8 @@ async function searchNominatim(place, country){
   }
   return {lat, lon, addr, src:"osm"};
 }
-async function searchPhoton(place, country){
-  const j = await getJSON(`https://photon.komoot.io/api/?q=${encodeURIComponent(place)}&limit=5&lat=-22&lon=-69.5`);
+async function searchPhoton(place, country, near){
+  const j = await getJSON(`https://photon.komoot.io/api/?q=${encodeURIComponent(place)}&limit=5&lat=${near ? near.lat : -22}&lon=${near ? near.lon : -69.5}`);
   const COUNTRY = {cl:"CL", ar:"AR", pe:"PE", bo:"BO"}[country];
   const f = (j.features || []).find(x => !COUNTRY || x.properties.countrycode === COUNTRY);
   if(!f) return null;
@@ -636,6 +637,16 @@ async function geocode(place, country){
   return res;
 }
 
+// busca de nuevo un lugar cerca del punto anterior cuando el primer resultado queda demasiado lejos para los km del tramo
+async function geocodeNear(place, country, near, maxKm){
+  const d = maxKm / 111, box = [near.lon - d*1.2, near.lat + d, near.lon + d*1.2, near.lat - d];
+  const qs = [place.replace(/[()]/g, " ").replace(/\s+/g, " ").trim(), place.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim()].filter((v,i,a) => v && a.indexOf(v) === i);
+  for(const q of qs){
+    try{ const g = await searchNominatim(q, country, box); if(g && hav(near, g) <= maxKm) return g; }catch(e){ geoNetFail = true; }
+    try{ const g = await searchPhoton(q, country, near); if(g && hav(near, g) <= maxKm) return g; }catch(e){ geoNetFail = true; }
+  }
+  return null;
+}
 /* ---------- Ruta (OSRM sobre OpenStreetMap) ---------- */
 const hav = (a,b) => { const R=6371, r=Math.PI/180, dLa=(b.lat-a.lat)*r, dLo=(b.lon-a.lon)*r;
   const h = Math.sin(dLa/2)**2 + Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); };
@@ -718,6 +729,17 @@ async function computePlate(pi){
     const r = p.rows[i]; if(!r.place || !r.place.trim()) continue;
     setStatus(`Buscando "${r.place}" (${tag})…`);
     let g = null; try{ g = await geocode(r.place, cfg.country); }catch(e){ g = null; }
+    const P = pts[pts.length-1], pkm = P ? parseFloat(P.row.km) : NaN;
+    const isCoord = /^\s*-?\d+(\.\d+)?\s*[,; ]\s*-?\d+(\.\d+)?\s*$/.test(r.place);
+    if(g && P && pkm > 0 && P.row.src !== "gps" && !isCoord){ // control: la distancia en línea recta no puede superar los km informados del tramo
+      const maxKm = pkm * 1.3 + 30;
+      if(hav(P.g, g) > maxKm){
+        setStatus(`Buscando "${r.place}" cerca de ${P.row.place} (${tag})…`);
+        const g2 = await geocodeNear(r.place, cfg.country, P.g, maxKm);
+        if(g2) g = g2;
+        else { rowInfo[pi+"|"+i] = {cls:"bad", text:`El buscador lo ubicó en ${g.addr}, a ${Math.round(hav(P.g, g))} km del lugar anterior (el tramo tiene ${Math.round(pkm)} km). Márcalo con clic en el mapa.`}; errors.push(`${tag}: "${r.place}" quedó lejos de su ubicación probable; márcalo en el mapa.`); continue; }
+      }
+    }
     if(!g){ rowInfo[pi+"|"+i] = {cls:"bad", text:"Lugar no encontrado. Márcalo con clic en el mapa o escribe \"lugar, comuna\"."}; errors.push(`${tag}: no se encontró "${r.place}"; márcalo en el mapa.`); continue; }
     rowInfo[pi+"|"+i] = {cls:"ok", text:g.addr + (g.src === "lista" ? " (ubicación aproximada de la lista incluida)" : "")};
     pts.push({i, row:r, g, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: cfg.addr ? g.addr : r.place.trim()});
