@@ -13,7 +13,7 @@
   --ui-bg:#eef1f4; --ui-panel:#ffffff; --ui-fg:#1d2733; --ui-muted:#5d6b7a; --ui-line:#d3dae2;
   --ui-accent:#096fa6; --ui-accent-soft:#e2eff7; --ui-bad:#b3261e; --ui-bad-soft:#fbe9e7; --ui-ok:#2e7d32;
   /* Colores del informe, tomados de los PDF de referencia */
-  --rp-blue:#096fa6; --rp-blue2:#1888c7; --rp-blue3:#1eade0; --rp-grid:#bfbfbf; --rp-text:#262626; --rp-sub:#595959; --rp-head:#404040;
+  --rp-blue:#096faa; --rp-orange:#ffaa00; --rp-line:#d6e0e8; --rp-zebra:#f3f7fa; --rp-blue2:#1888c7; --rp-blue3:#1eade0; --rp-grid:#bfbfbf; --rp-text:#262626; --rp-sub:#595959; --rp-head:#404040;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -93,25 +93,28 @@ details[open] summary{margin-bottom:10px}
 .sheet .box{position:absolute;overflow:hidden}
 .sheet .bars{position:absolute;left:556pt;top:0;width:20pt}
 .sheet .bars i{display:block}
-.sheet .hdr{position:absolute;left:58pt;right:70pt;top:30pt;height:44pt;display:flex;align-items:center;justify-content:space-between}
+.sheet .hdr{position:absolute;left:58pt;right:58pt;top:28pt;height:44pt;display:flex;align-items:center;justify-content:space-between}
+.sheet .rule{position:absolute;left:58pt;right:58pt;top:80pt;height:1pt;background:var(--rp-blue)}
+.sheet .rule i{position:absolute;left:0;top:-1pt;width:56pt;height:3pt;background:var(--rp-orange)}
 .sheet .hdr img{height:42pt;max-width:200pt;width:auto;display:block;object-fit:contain}
 .sheet .hdr img.gps{height:38pt;margin-left:auto}
-.sheet .foot{position:absolute;left:0;right:0;top:744pt;text-align:center;font-size:7pt;color:var(--rp-sub)}
-.sheet h1.title{font-size:18pt;font-weight:300;color:var(--rp-blue);margin:0;line-height:1.15;text-transform:uppercase;letter-spacing:0}
+.sheet .foot{position:absolute;left:58pt;right:58pt;top:742pt;padding-top:5pt;border-top:0.75pt solid var(--rp-line);display:flex;justify-content:space-between;font-size:7pt;color:var(--rp-sub);letter-spacing:.02em}
+.sheet h1.title{font-size:19pt;font-weight:400;color:var(--rp-blue);margin:0;line-height:1.15;text-transform:uppercase;letter-spacing:.02em}
 .sheet p.sub{font-size:9pt;color:var(--rp-sub);margin:5pt 0 0}
-.sheet h2.sec{font-size:11.5pt;font-weight:300;color:var(--rp-head);margin:0;text-transform:uppercase;line-height:1.2}
+.sheet h2.sec{font-size:11pt;font-weight:400;color:var(--rp-blue);margin:0;text-transform:uppercase;line-height:1.2;letter-spacing:.05em;border-left:3pt solid var(--rp-orange);padding-left:6pt}
 .sheet p.txt{font-size:9pt;line-height:14pt;margin:0}
 .sheet table.t{border-collapse:collapse;table-layout:fixed;font-size:7.5pt;line-height:9.4pt}
-.sheet table.t th{background:var(--rp-blue);color:#fff;font-weight:300;text-align:left;vertical-align:top;padding:1.6pt 4pt 1.6pt 4pt;border:0.5pt solid var(--rp-grid)}
-.sheet table.t td{padding:1.6pt 4pt 1.4pt 4pt;border:0.5pt solid var(--rp-grid);vertical-align:top}
+.sheet table.t th{background:var(--rp-blue);color:#fff;font-weight:400;text-align:left;vertical-align:top;padding:2.2pt 4pt;border:0;border-right:0.5pt solid rgba(255,255,255,.35)}
+.sheet table.t td{padding:1.8pt 4pt 1.6pt 4pt;border:0;border-bottom:0.5pt solid var(--rp-line);vertical-align:top}
+.sheet table.t tbody tr:nth-child(even) td{background:var(--rp-zebra)}
 .sheet table.t .r{text-align:right}
 .sheet table.sum{font-size:9pt;line-height:11pt}
 .sheet table.sum th,.sheet table.sum td{padding:1.8pt 4pt 1.8pt 4pt}
-.sheet .stg h3{font-size:calc(var(--stg,9pt) + .5pt);font-weight:300;color:var(--rp-blue);margin:0 0 calc(var(--stg,9pt) * .3);line-height:1.25}
+.sheet .stg h3{font-size:calc(var(--stg,9pt) + .5pt);font-weight:400;color:var(--rp-blue);margin:0 0 calc(var(--stg,9pt) * .3);line-height:1.25}
 .sheet .stg p{font-size:var(--stg,9pt);line-height:1.5;margin:0 0 calc(var(--stg,9pt) * .75)}
 .sheet .note{font-size:7pt;color:var(--rp-sub);margin:2pt 0 0}
 .sheet .rmap{position:absolute;border:0.75pt solid #a6a6a6;background:#c8e0ea}
-.sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding-top:6pt;border-top:0.75pt solid #bfbfbf;font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
+.sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding:6pt 8pt;border-left:3pt solid var(--rp-blue);background:var(--rp-zebra);font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
 .sheet .src img{height:24pt;width:auto;flex:none}
 .itin .info.gps{color:#1f5f8b}
 .sheet .chartcap{font-size:7pt;color:var(--rp-sub);text-align:center;margin:0}
@@ -195,6 +198,7 @@ details[open] summary{margin-bottom:10px}
         <label class="f">Patente<input id="plName" placeholder="SJDR-78"></label>
         <label class="f">Código del tracto<input id="plCode" placeholder="CK93"></label>
       </div>
+      <p class="hint">La patente y el código se pueden cambiar y el informe sale con lo que escribas. Si los datos vienen de un archivo de GPS Chile de otra patente, el informe lo indica en la línea de fuente.</p>
       <div class="row" style="background:var(--ui-accent-soft);border-radius:8px;padding:10px">
         <button class="btn primary" id="btnImport" type="button">Importar ruta desde PDF o Excel</button>
         <button class="btn" id="btnUndoImport" type="button" hidden>Deshacer importación</button>
@@ -269,7 +273,7 @@ function normalizeState(){
   const d = sampleState().cfg;
   S.cfg = Object.assign({}, d, S.cfg || {});
   if(!S.cfg.company || S.cfg.company === "T&G Vecchtelligence") S.cfg.company = "LGO Operadores Logísticos";
-  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.vmax) o.vmax = r.vmax; if(r.km) o.km = r.km; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; } return o; })}));
+  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.vmax) o.vmax = r.vmax; if(r.km) o.km = r.km; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; if(r.gpsPlate) o.gpsPlate = r.gpsPlate; } return o; })}));
   if(S.active == null || S.active >= S.plates.length) S.active = 0;
   if(!S.report) S.report = "active";
 }
@@ -671,7 +675,7 @@ async function computePlate(pi){
     }
     const gkm = parseFloat(A.row.km), gv = parseFloat(A.row.vmax);
     if(A.row.src === "gps" && A.row.ta && end > A.dep && gkm >= 0 && gv >= 0){ // viaje de la exportación GPS: valores reales
-      trips.push({start:A.dep, end, from:A.label, to:B.label, km:gkm, vmax:gv, geom:rt.geom, a:A, b:B, gps:true, part:!!A.row.part, file:A.row.file || ""});
+      trips.push({start:A.dep, end, from:A.label, to:B.label, km:gkm, vmax:gv, geom:rt.geom, a:A, b:B, gps:true, part:!!A.row.part, file:A.row.file || "", gpsPlate:A.row.gpsPlate || ""});
       continue;
     }
     if(rt.approx) routeNetFail = true;
@@ -771,14 +775,16 @@ function stagesOf(an, r){
 
 /* ---------- Armado de hojas (paginación manual, tamaño carta) ---------- */
 const PT = 4/3; // px por pt en pantalla
-let maps = [], hdrGps = false;
+let maps = [], hdrGps = false, curRep = 0;
 function newSheet(opts){
   const sh = document.createElement("section"); sh.className = "sheet";
-  if(opts.bars) sh.insertAdjacentHTML("beforeend", `<div class="bars"><i style="height:28pt;background:var(--rp-blue)"></i><i style="height:24pt;background:var(--rp-blue2)"></i><i style="height:28pt;background:var(--rp-blue3)"></i></div>`);
+  if(false) sh.insertAdjacentHTML("beforeend", `<div class="bars"><i style="height:28pt;background:var(--rp-blue)"></i><i style="height:24pt;background:var(--rp-blue2)"></i><i style="height:28pt;background:var(--rp-blue3)"></i></div>`);
   // encabezado: logo de la empresa y logo GPS Chile (este último solo si el informe usa datos de GPS Chile)
   const lg = S.cfg.lgoShow !== false && logoSrc(), gl = S.cfg.gpsShow !== false && hdrGps;
   if(lg || gl) sh.insertAdjacentHTML("beforeend", `<div class="hdr">${lg ? `<img src="${logoSrc()}" alt="">` : ""}${gl ? `<img class="gps" src="${gpsLogoSrc()}" alt="GPS Chile">` : ""}</div>`);
-  if(opts.foot) sh.insertAdjacentHTML("beforeend", `<div class="foot">${esc(opts.foot)}</div>`);
+  sh.insertAdjacentHTML("beforeend", `<div class="rule"><i></i></div>`);
+  sh.dataset.rep = curRep;
+  sh.insertAdjacentHTML("beforeend", `<div class="foot"><span>${esc(opts.foot || "")}</span><span class="pg"></span></div>`);
   $("report").appendChild(sh); return sh;
 }
 function addBox(sh, b){ const d = document.createElement("div"); d.className = "box"; Object.assign(d.style, {left:b.left+"pt", top:b.top+"pt", width:b.width+"pt", height:b.height+"pt"}); sh.appendChild(d); return d; }
@@ -831,7 +837,9 @@ async function generate(){
   try{ await document.fonts.ready; }catch(e){}
   maps.forEach(m => m.remove()); maps = [];
   $("report").innerHTML = "";
-  for(const r of results) renderReport(r);
+  results.forEach((r, i) => { curRep = i; renderReport(r); });
+  // numeración "Página x de n" por informe
+  results.forEach((r, i) => { const shs = [...$("report").querySelectorAll(`.sheet[data-rep="${i}"]`)]; shs.forEach((sh, k) => { const pg = sh.querySelector(".foot .pg"); if(pg) pg.textContent = `Página ${k+1} de ${shs.length}`; }); });
   const r0 = results[0];
   document.title = results.length === 1 ? `Recorrido ${r0.p.code ? r0.p.code + " " : ""}${r0.p.name} ${r0.periodTag}` : `Recorrido ${results.map(r => r.p.name).join(" ")} ${r0.periodTag}`;
   setStatus(errors.length ? "Informe generado con avisos: " + errors.join(" ") : "Informe generado. Revisa la vista previa y usa \"Imprimir / Guardar PDF\".", errors.length > 0);
@@ -922,6 +930,8 @@ function sourceHTML(r, an){
   const g = vt.filter(t => t.gps), files = [...new Set(g.map(t => t.file).filter(Boolean))];
   const fileTxt = files.length ? ` (archivo ${files.join(", ")})` : "";
   const idleManual = r.pts.some(p => p.idle > 0);
+  const gp = [...new Set(g.map(t => t.gpsPlate).filter(Boolean))].filter(x => x !== r.p.name);
+  const plateTxt = gp.length ? ` Atención: los datos GPS de este informe fueron registrados por la patente ${gp.join(", ")}, no por ${r.p.name || "la patente indicada"}.` : "";
   const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : (g.length ? " La exportación GPS no incluye horas de ralentí." : "");
   let txt, logo = false;
   const part = g.some(t => t.part);
@@ -938,7 +948,7 @@ function sourceHTML(r, an){
   } else {
     txt = `Fuente de información: itinerario ingresado manualmente; distancias, horarios y velocidades estimados con rutas de OpenStreetMap${vt.some(t => t.vManual) ? " o ingresados a mano" : ""}.${idleTxt}`;
   }
-  return `<div class="src"><span>${esc(txt)}</span></div>`;
+  return `<div class="src"><span>${esc(txt + plateTxt)}</span></div>`;
 }
 function chartSVG(stat){
   const W = 448, Hh = 175, left = 34, top = 6, plotH = 120, base = top + plotH;
@@ -1105,7 +1115,7 @@ function recordsToPlates(recs, yearHint, gps, fileName){
     const clean = s => String(s || "").replace(/\s+/g," ").trim().replace(/[,;]+$/,"");
     const rows = items.map((r, i) => {
       const row = {d:r.d, t:r.t, place: clean(r.from || (i > 0 ? items[i-1].to : "")), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta: timeOnly(r.end)};
-      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; if(gps === "part") row.part = 1; }
+      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; if(gps === "part") row.part = 1; if(g.name) row.gpsPlate = g.name; }
       return row;
     });
     if(!hasTo) undated.forEach(r => rows.push({d:"", t:"", place:clean(r.from), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta:""}));
