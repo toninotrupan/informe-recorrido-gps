@@ -967,7 +967,7 @@ function sourceHTML(r, an){
     txt = `Fuente de información: GPS Chile, informe de viajes exportado desde la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas según GPS Chile; el trazado del mapa es aproximado entre las posiciones registradas.${idleTxt}`;
     logo = true;
   } else if(g.length){
-    txt = `Fuente de información: ${g.length} de ${vt.length} viajes según GPS Chile${fileTxt}. Los demás viajes se ingresaron o modificaron manualmente y sus distancias, horarios y velocidades son estimados.${idleTxt}`;
+    txt = `Fuente de información: ${g.length} de ${vt.length} viajes según GPS Chile${fileTxt}; ${vt.length - g.length} ${vt.length - g.length === 1 ? "viaje modificado" : "viajes modificados"} manualmente.${idleTxt}`;
   } else if(g.length){
     txt = `Fuente de información: ${g.length === vt.length ? "" : g.length + " de " + vt.length + " viajes según "}exportación de plataforma GPS${fileTxt}${g.length === vt.length ? "" : "; los demás son estimados"}.${idleTxt}`;
   } else {
