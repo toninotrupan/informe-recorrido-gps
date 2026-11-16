@@ -718,6 +718,47 @@ function joinY(list){ return list.length <= 1 ? (list[0]||"") : list.slice(0,-1)
 const shortName = s => String(s).split(/\s*[(,]/)[0].trim() || String(s);
 const ov = (a, b, s, e) => Math.max(0, Math.min(+b, +e) - Math.max(+a, +s));
 
+// punto sobre una línea [[lat,lon],...] a una fracción f de su largo
+function alongLine(geom, f){
+  if(!geom || geom.length < 2) return null;
+  const seg = []; let tot = 0;
+  for(let i=1;i<geom.length;i++){ const d = hav({lat:geom[i-1][0], lon:geom[i-1][1]}, {lat:geom[i][0], lon:geom[i][1]}); seg.push(d); tot += d; }
+  let goal = Math.max(0, Math.min(1, f)) * tot;
+  for(let i=0;i<seg.length;i++){
+    if(goal <= seg[i] || i === seg.length-1){ const t = seg[i] ? Math.min(1, goal/seg[i]) : 0;
+      return {lat: geom[i][0] + (geom[i+1][0]-geom[i][0])*t, lon: geom[i][1] + (geom[i+1][1]-geom[i][1])*t}; }
+    goal -= seg[i];
+  }
+  return null;
+}
+// ubica los puntos que el buscador no encontró sobre la ruta entre el punto anterior y el siguiente,
+// en proporción a los km ingresados de cada tramo (o al tiempo de viaje según fecha y hora si faltan km)
+async function placeBetween(pts, info, pi){
+  for(let k=0;k<pts.length;k++){
+    if(pts[k].g || k === 0) continue;
+    let e = k; while(e < pts.length && !pts[e].g) e++;
+    const A = pts[k-1], B = pts[e]; if(!A || !A.g || !B){ k = e; continue; }
+    const legs = []; // tramos A→...→B
+    for(let q=k-1;q<e;q++){
+      const P = pts[q], km = parseFloat(P.row.km);
+      let sec = 0; if(P.dep && P.row.ta){ const t2 = parseDT(P.row.d, P.row.ta); if(t2 <= P.dep) t2.setDate(t2.getDate()+1); sec = (t2 - P.dep)/1000; }
+      else if(P.dep && pts[q+1].dep) sec = Math.max(0, (pts[q+1].dep - P.dep)/1000);
+      legs.push({km: km > 0 ? km : 0, sec});
+    }
+    const useKm = legs.every(l => l.km > 0), w = legs.map(l => useKm ? l.km : l.sec), tot = w.reduce((a,b)=>a+b, 0);
+    if(!(tot > 0)){ k = e; continue; }
+    let rt = null; try{ rt = await route(A.g, B.g); }catch(err){ rt = null; }
+    const geom = rt && rt.geom && rt.geom.length > 1 ? rt.geom : [[A.g.lat, A.g.lon], [B.g.lat, B.g.lon]];
+    let acc = 0;
+    for(let q=k;q<e;q++){
+      acc += w[q-k];
+      const c = alongLine(geom, acc/tot); if(!c) continue;
+      pts[q].g = {lat:c.lat, lon:c.lon, addr: pts[q].row.place.trim() + " (ubicación estimada sobre la ruta)", src:"estimada"};
+      info[pi+"|"+pts[q].i] = {cls:"ok", text:`Ubicación estimada entre ${A.row.place} y ${B.row.place}, según ${useKm ? "los km" : "la fecha y hora"} de cada tramo. Puedes corregirla con clic en el mapa.`};
+    }
+    k = e;
+  }
+}
 /* ---------- Cálculo del recorrido ---------- */
 async function computePlate(pi){
   const p = S.plates[pi], cfg = S.cfg, errors = [];
@@ -738,16 +779,17 @@ async function computePlate(pi){
       if(hav(P.g, g) > maxKm){
         {
           rowInfo[pi+"|"+i] = {cls:"bad", text:`El buscador lo ubicó en ${g.addr}, a ${Math.round(hav(P.g, g))} km del lugar anterior (solo ${Math.round(pkm)} km de viaje). No se dibuja en el mapa; los km y horarios ingresados sí se usan. Para dibujarlo, márcalo con clic en el mapa.`};
-          errors.push(`${tag}: "${r.place}" no se pudo ubicar en el mapa (los km ingresados se usan igual); márcalo en el mapa si quieres verlo dibujado.`);
           pts.push({i, row:r, g:null, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: r.place.trim()});
           continue;
         }
       }
     }
-    if(!g){ rowInfo[pi+"|"+i] = {cls:"bad", text:"Lugar no encontrado. Márcalo con clic en el mapa o escribe \"lugar, comuna\"."}; errors.push(`${tag}: no se encontró "${r.place}"; márcalo en el mapa.`); continue; }
+    if(!g){ rowInfo[pi+"|"+i] = {cls:"bad", text:"Lugar no encontrado. Márcalo con clic en el mapa o escribe \"lugar, comuna\"."}; pts.push({i, row:r, g:null, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: r.place.trim()}); continue; }
     rowInfo[pi+"|"+i] = {cls:"ok", text:g.addr + (g.src === "lista" ? " (ubicación aproximada de la lista incluida)" : "")};
     pts.push({i, row:r, g, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: cfg.addr ? g.addr : r.place.trim()});
   }
+  await placeBetween(pts, rowInfo, pi);
+  for(const P of pts) if(!P.g) errors.push(`${tag}: no se pudo ubicar "${P.row.place}"; márcalo en el mapa.`);
   const trips = [], stops = [];
   for(let k=0;k<pts.length-1;k++){
     const A = pts[k], B = pts[k+1];
