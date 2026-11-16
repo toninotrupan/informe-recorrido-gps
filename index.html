@@ -851,6 +851,10 @@ function renderReport(r){
   const s1 = newSheet({foot});
   const b1 = addBox(s1, {left:56.9, top:106, width:498, height:640});
   const T = an.tot;
+  // días sin viajes ni motor: no se muestran en el gráfico ni en el detalle diario (se nombran en una nota)
+  const act = an.stat.filter(s => Math.round(s.km) > 0 || s.mov + s.idle >= 0.05);
+  const shown = act.length ? act : an.stat, omit = an.stat.filter(s => !shown.includes(s));
+  const omitTxt = omit.length ? ` Días sin viajes (no se muestran): ${omit.map(s => dm(s.d)).join(", ")}.` : "";
   const sumRows = [["Kilómetros recorridos", Math.round(T.km)], ["Horas de motor", dec1(T.motor)], ["Horas en movimiento", dec1(T.mov)],
     ["Horas en ralentí (motor encendido detenido)", dec1(T.idle)], ["Velocidad máxima", Math.round(T.vmax) + " km/h"], ["Días con viaje", T.days]];
   b1.innerHTML = `<h1 class="title" ${CE}>Recorrido tracto ${esc(code)} · Patente ${esc(name)}</h1>
@@ -861,8 +865,8 @@ function renderReport(r){
       <tbody>${sumRows.map(x => `<tr><td>${x[0]}</td><td class="r">${x[1]}</td></tr>`).join("")}</tbody></table>
     <p class="txt" style="margin-top:20pt" ${CE}>${esc(routeSummary(an, from))}</p>
     <h2 class="sec" style="margin-top:20pt" ${CE}>Kilómetros por día</h2>
-    ${chartSVG(an.stat)}
-    <p class="chartcap" ${CE}>Kilómetros por día.</p>
+    ${chartSVG(shown)}
+    <p class="chartcap" ${CE}>Kilómetros por día.${esc(omitTxt)}</p>
     ${sourceHTML(r, an)}`;
 
   /* Hoja 2: recorrido por etapas con mapa */
@@ -883,7 +887,7 @@ function renderReport(r){
 
   /* Hoja 3: tablas */
   const W = 495;
-  const dRows = an.stat.map(s => `<tr><td>${dm(s.d)}</td><td class="r">${Math.round(s.km)}</td><td class="r">${dec1(s.mov+s.idle)}</td><td class="r">${dec1(s.mov)}</td><td class="r">${dec1(s.idle)}</td><td class="r">${Math.round(s.vmax)}</td><td>${esc(s.places.join(" > "))}</td></tr>`);
+  const dRows = shown.map(s => `<tr><td>${dm(s.d)}</td><td class="r">${Math.round(s.km)}</td><td class="r">${dec1(s.mov+s.idle)}</td><td class="r">${dec1(s.mov)}</td><td class="r">${dec1(s.idle)}</td><td class="r">${Math.round(s.vmax)}</td><td>${esc(s.places.join(" > "))}</td></tr>`);
   dRows.push(`<tr><td>Total</td><td class="r">${Math.round(T.km)}</td><td class="r">${dec1(T.motor)}</td><td class="r">${dec1(T.mov)}</td><td class="r">${dec1(T.idle)}</td><td class="r">${Math.round(T.vmax)}</td><td></td></tr>`);
   const detRows = an.det.map(s => `<tr><td>${dmhm(s.start)}</td><td>${dmhm(s.end)}</td><td class="r">${dec1((s.end-s.start)/H)}</td><td>${esc(s.loc)}</td></tr>`);
   const vRows = an.vt.filter(t => t.km > 20).map(t => `<tr><td>${dmhm(t.start)}</td><td>${dmhm(t.end)}</td><td>${esc(t.from)}</td><td>${esc(t.to)}</td><td class="r">${Math.round(t.km)}</td><td class="r">${Math.round(t.vmax)}</td></tr>`);
@@ -891,6 +895,7 @@ function renderReport(r){
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Detalle diario</h2>`},
     {table:true, keepWith:true, width:W, cols:[34.4,31.2,40,36,42.4,41.6,269.4], after:12,
       head:`<tr><th>Día</th><th class="r">Km</th><th class="r">Motor h</th><th class="r">Mov. h</th><th class="r">Ralentí h</th><th class="r">Vel.<br>máx.</th><th>Dónde estuvo (detenciones de 30 min o más)</th></tr>`, rows:dRows},
+    ...(omit.length ? [{html:`<p class="note" style="margin:-8pt 0 12pt" ${CE}>${esc(omitTxt.trim())}</p>`}] : []),
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Dónde estuvo detenido (1 hora o más)</h2>`},
     {table:true, keepWith:true, width:491, cols:[68,65.6,42.4,315], before:0, after:12, cls:"det",
       head:`<tr><th>Desde</th><th>Hasta</th><th class="r">Horas</th><th>Lugar</th></tr>`, rows: detRows.length ? detRows : [`<tr><td colspan="4">Sin detenciones de 1 hora o más.</td></tr>`]},
