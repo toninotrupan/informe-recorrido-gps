@@ -877,7 +877,7 @@ function renderReport(r){
   const gen = cfg.gen ? fDate(parseDT(cfg.gen)) : fDate(new Date());
   // pie: empresa · fuente (solo dice GPS Chile si los viajes vienen de GPS Chile) · período
   const vtr = r.trips.filter(t => t.end >= from && t.start <= to), ng = vtr.filter(t => t.gps).length;
-  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : ng ? "Fuente: GPS Chile y datos ingresados manualmente" : "Fuente: datos ingresados manualmente (estimados)";
+  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : ng ? "Fuente: GPS Chile" : "Fuente: datos ingresados manualmente (estimados)";
   const foot = [cfg.company, srcFoot, periodShort(from, to)].filter(Boolean).join(" · ");
   const now = new Date(), genT = `${gen} · ${p2(now.getHours())}:${p2(now.getMinutes())} h`; // fecha y hora de creación
   const CE = 'contenteditable="true" spellcheck="false"';
@@ -892,7 +892,7 @@ function renderReport(r){
   const shown = act.length ? act : an.stat, omit = an.stat.filter(s => !shown.includes(s));
   const omitTxt = omit.length ? ` Días sin viajes (no se muestran): ${omit.map(s => dm(s.d)).join(", ")}.` : "";
   const sumRows = [["Kilómetros recorridos", Math.round(T.km)], ["Horas de motor", dec1(T.motor)], ["Horas en movimiento", dec1(T.mov)],
-    ["Horas en ralentí (motor encendido detenido)", dec1(T.idle)], ["Velocidad máxima", Math.round(T.vmax) + " km/h"], ["Días con viaje", T.days]];
+    ["Velocidad máxima", Math.round(T.vmax) + " km/h"], ["Días con viaje", T.days]];
   b1.innerHTML = `<h1 class="title" ${CE}>Informe de recorrido · Patente ${esc(name)}</h1>
     <p class="sub" ${CE}>Período: ${periodLong(from, to)} · Documento creado el ${genT}</p>
     <h2 class="sec" style="margin-top:13pt" ${CE}>Resumen</h2>
@@ -927,14 +927,14 @@ function renderReport(r){
 
   /* Hoja 3: tablas */
   const W = 495;
-  const dRows = shown.map(s => `<tr><td>${dm(s.d)}</td><td class="r">${Math.round(s.km)}</td><td class="r">${dec1(s.mov+s.idle)}</td><td class="r">${dec1(s.mov)}</td><td class="r">${dec1(s.idle)}</td><td class="r">${Math.round(s.vmax)}</td><td>${esc(s.places.join(" > "))}</td></tr>`);
-  dRows.push(`<tr><td>Total</td><td class="r">${Math.round(T.km)}</td><td class="r">${dec1(T.motor)}</td><td class="r">${dec1(T.mov)}</td><td class="r">${dec1(T.idle)}</td><td class="r">${Math.round(T.vmax)}</td><td></td></tr>`);
+  const dRows = shown.map(s => `<tr><td>${dm(s.d)}</td><td class="r">${Math.round(s.km)}</td><td class="r">${dec1(s.mov+s.idle)}</td><td class="r">${dec1(s.mov)}</td><td class="r">${Math.round(s.vmax)}</td><td>${esc(s.places.join(" > "))}</td></tr>`);
+  dRows.push(`<tr><td>Total</td><td class="r">${Math.round(T.km)}</td><td class="r">${dec1(T.motor)}</td><td class="r">${dec1(T.mov)}</td><td class="r">${Math.round(T.vmax)}</td><td></td></tr>`);
   const detRows = an.det.map(s => `<tr><td>${dmhm(s.start)}</td><td>${dmhm(s.end)}</td><td class="r">${dec1((s.end-s.start)/H)}</td><td>${esc(s.loc)}</td></tr>`);
   const vRows = an.vt.filter(t => t.km > 20).map(t => `<tr><td>${dmhm(t.start)}</td><td>${dmhm(t.end)}</td><td>${esc(t.from)}</td><td>${esc(t.to)}</td><td class="r">${Math.round(t.km)}</td><td class="r">${Math.round(t.vmax)}</td></tr>`);
   const blocks = [
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Detalle diario</h2>`},
-    {table:true, keepWith:true, width:W, cols:[34.4,31.2,40,36,42.4,41.6,269.4], after:12,
-      head:`<tr><th>Día</th><th class="r">Km</th><th class="r">Motor h</th><th class="r">Mov. h</th><th class="r">Ralentí h</th><th class="r">Vel.<br>máx.</th><th>Dónde estuvo (detenciones de 30 min o más)</th></tr>`, rows:dRows},
+    {table:true, keepWith:true, width:W, cols:[34.4,31.2,40,36,41.6,311.8], after:12,
+      head:`<tr><th>Día</th><th class="r">Km</th><th class="r">Motor h</th><th class="r">Mov. h</th><th class="r">Vel.<br>máx.</th><th>Dónde estuvo (detenciones de 30 min o más)</th></tr>`, rows:dRows},
     ...(omit.length ? [{html:`<p class="note" style="margin:-8pt 0 12pt" ${CE}>${esc(omitTxt.trim())}</p>`}] : []),
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Dónde estuvo detenido (1 hora o más)</h2>`},
     {table:true, keepWith:true, width:491, cols:[68,65.6,42.4,315], before:0, after:12, cls:"det",
@@ -957,22 +957,12 @@ function sourceHTML(r, an){
   const idleManual = r.pts.some(p => p.idle > 0);
   const gp = [...new Set(g.map(t => t.gpsPlate).filter(Boolean))].filter(x => x !== r.p.name);
   const plateTxt = gp.length ? ` Atención: los datos GPS de este informe fueron registrados por la patente ${gp.join(", ")}, no por ${r.p.name || "la patente indicada"}.` : "";
-  const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : (g.length ? " La exportación GPS no incluye horas de ralentí." : "");
+  const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : "";
   let txt, logo = false;
   const part = g.some(t => t.part);
-  if(g.length && g.length === vt.length && part){
-    txt = `Fuente de información: GPS Chile, extracto de los viajes registrados por la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas de esos viajes según GPS Chile. El extracto no incluye los viajes cortos, por lo que los kilómetros y horas pueden ser menores que el total de la plataforma; el trazado del mapa es aproximado.${idleTxt}`;
-    logo = true;
-  } else if(g.length && g.length === vt.length){
-    txt = `Fuente de información: GPS Chile, informe de viajes exportado desde la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas según GPS Chile; el trazado del mapa es aproximado entre las posiciones registradas.${idleTxt}`;
-    logo = true;
-  } else if(g.length){
-    txt = `Fuente de información: ${g.length} de ${vt.length} viajes según GPS Chile${fileTxt}; ${vt.length - g.length} ${vt.length - g.length === 1 ? "viaje modificado" : "viajes modificados"} manualmente.${idleTxt}`;
-  } else if(g.length){
-    txt = `Fuente de información: ${g.length === vt.length ? "" : g.length + " de " + vt.length + " viajes según "}exportación de plataforma GPS${fileTxt}${g.length === vt.length ? "" : "; los demás son estimados"}.${idleTxt}`;
-  } else {
-    txt = `Fuente de información: itinerario ingresado manualmente; distancias, horarios y velocidades estimados con rutas de OpenStreetMap${vt.some(t => t.vManual) ? " o ingresados a mano" : ""}.${idleTxt}`;
-  }
+  if(g.length && g.length === vt.length) txt = part ? "Fuente de información: GPS Chile (extracto con viajes de 20 km o más)." : "Fuente de información: GPS Chile.";
+  else if(g.length) txt = `Fuente de información: GPS Chile (${g.length} de ${vt.length} viajes); ${vt.length - g.length} ${vt.length - g.length === 1 ? "viaje modificado" : "viajes modificados"} manualmente.`;
+  else txt = "Fuente de información: datos ingresados manualmente (estimados).";
   return `<div class="src"><span>${esc(txt + plateTxt)}</span></div>`;
 }
 function chartSVG(stat){
