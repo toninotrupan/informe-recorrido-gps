@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de Informe de Recorrido</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --ui-bg:#eef1f4; --ui-panel:#ffffff; --ui-fg:#1d2733; --ui-muted:#5d6b7a; --ui-line:#d3dae2;
+  --ui-accent:#096fa6; --ui-accent-soft:#e2eff7; --ui-bad:#b3261e; --ui-bad-soft:#fbe9e7; --ui-ok:#2e7d32;
+  /* Colores del informe, tomados de los PDF de referencia */
+  --rp-blue:#096fa6; --rp-blue2:#1888c7; --rp-blue3:#1eade0; --rp-grid:#bfbfbf; --rp-text:#262626; --rp-sub:#595959; --rp-head:#404040;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--ui-bg);color:var(--ui-fg);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.topbar{background:var(--ui-accent);color:#fff;padding:10px max(16px,env(safe-area-inset-left,0px));display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.topbar h1{font-size:17px;margin:0;font-weight:650}
+.topbar .sp{flex:1}
+.topbar button{background:#fff;color:var(--ui-accent);border:0;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer}
+.topbar button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55)}
+.topbar label{display:flex;gap:6px;align-items:center;font-size:13px}
+.topbar select{border-radius:6px;border:0;padding:7px 8px;color:var(--ui-fg);background:#fff}
+.layout{display:grid;grid-template-columns:minmax(0,600px) minmax(0,1fr);gap:18px;padding:18px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));align-items:start}
+@media (max-width:1250px){.layout{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--ui-panel);border:1px solid var(--ui-line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel + .panel{margin-top:14px}
+.panel h2{font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
+.panel h2 .n{background:var(--ui-accent);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-grid;place-items:center;font-size:12px}
+.hint{color:var(--ui-muted);font-size:12.5px;margin:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media (max-width:520px){.grid2,.grid3{grid-template-columns:1fr}}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ui-muted);font-weight:600;min-width:0}
+label.f input,label.f select{font-weight:400;font-size:14px;color:var(--ui-fg);border:1px solid var(--ui-line);border-radius:6px;padding:6px 8px;background:#fff;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--ui-accent);outline-offset:1px}
+.btn{border:1px solid var(--ui-line);background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:13px}
+.btn:hover{border-color:var(--ui-accent)}
+.btn.primary{background:var(--ui-accent);color:#fff;border-color:var(--ui-accent)}
+.btn.danger{color:var(--ui-bad)}
+a.btn{text-decoration:none;color:var(--ui-accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tab{border:1px solid var(--ui-line);background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-weight:600;font-size:13px}
+.tab.on{background:var(--ui-accent);color:#fff;border-color:var(--ui-accent)}
+.itin-wrap{overflow-x:auto}
+.itin{width:100%;border-collapse:collapse;font-size:13px}
+.itin th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ui-muted);text-align:left;padding:4px;border-bottom:1px solid var(--ui-line);white-space:nowrap}
+.itin td{padding:4px 3px;vertical-align:top;border-bottom:1px solid #eef1f4}
+.itin td.idx{color:var(--ui-muted);font-variant-numeric:tabular-nums;padding-top:9px;width:22px}
+.itin input{border:1px solid var(--ui-line);border-radius:5px;padding:5px 6px;width:100%;background:#fff;font-size:13px}
+.itin input[type=date]{min-width:126px}
+.itin input[type=time]{min-width:94px}
+.itin input.place{min-width:170px}
+.itin input.idle{width:62px}
+.itin .x{border:0;background:none;color:var(--ui-muted);cursor:pointer;font-size:16px;padding:4px 6px}
+.itin .x:hover{color:var(--ui-bad)}
+.itin .info{font-size:11.5px;color:var(--ui-muted);margin-top:3px;line-height:1.3}
+.itin .info.bad{color:var(--ui-bad)}
+.itin .info.ok{color:var(--ui-ok)}
+.itin tr.final td{background:#fafbfc}
+.status{font-size:13px;padding:8px 10px;border-radius:6px;background:var(--ui-accent-soft);color:var(--ui-accent)}
+.status.bad{background:var(--ui-bad-soft);color:var(--ui-bad)}
+.status:empty{display:none}
+details summary{cursor:pointer;font-weight:600;font-size:13px}
+details[open] summary{margin-bottom:10px}
+.check{display:flex;gap:8px;align-items:center;font-size:13px}
+.pickmap{height:320px;border:1px solid var(--ui-line);border-radius:8px;cursor:crosshair}
+.pickwrap{display:flex;flex-direction:column;gap:6px}
+.num{background:#096fa6;color:#fff;border-radius:50%;width:22px;height:22px;font:600 11px/18px system-ui,Arial,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.num.last{background:#d62d20}
+.logoprev{height:34px;max-width:140px;object-fit:contain;border:1px dashed var(--ui-line);border-radius:4px;background:#fff}
+
+/* ====== Hojas del informe (tamaño carta, medidas en pt como el original) ====== */
+.preview-wrap{min-width:0;overflow-x:auto}
+.preview-note{font-size:12.5px;color:var(--ui-muted);margin:0 0 8px}
+#report{display:flex;flex-direction:column;align-items:center;gap:14px}
+.sheet{position:relative;width:612pt;height:792pt;background:#fff;box-shadow:0 2px 14px rgba(20,40,60,.18);overflow:hidden;flex:none;
+  font-family:"Calibri Light","Calibri","Carlito","Segoe UI",Arial,sans-serif;color:var(--rp-text);font-weight:300;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.sheet *{font-family:inherit}
+.sheet .box{position:absolute;overflow:hidden}
+.sheet .bars{position:absolute;left:556pt;top:0;width:20pt}
+.sheet .bars i{display:block}
+.sheet .logo{position:absolute;left:60pt;top:41.6pt;height:30.4pt}
+.sheet .foot{position:absolute;left:0;right:0;top:744pt;text-align:center;font-size:7pt;color:var(--rp-sub)}
+.sheet h1.title{font-size:18pt;font-weight:300;color:var(--rp-blue);margin:0;line-height:1.15;text-transform:uppercase;letter-spacing:0}
+.sheet p.sub{font-size:9pt;color:var(--rp-sub);margin:5pt 0 0}
+.sheet h2.sec{font-size:11.5pt;font-weight:300;color:var(--rp-head);margin:0;text-transform:uppercase;line-height:1.2}
+.sheet p.txt{font-size:9pt;line-height:14pt;margin:0}
+.sheet table.t{border-collapse:collapse;table-layout:fixed;font-size:7.5pt;line-height:9.4pt}
+.sheet table.t th{background:var(--rp-blue);color:#fff;font-weight:300;text-align:left;vertical-align:top;padding:1.6pt 4pt 1.6pt 4pt;border:0.5pt solid var(--rp-grid)}
+.sheet table.t td{padding:1.6pt 4pt 1.4pt 4pt;border:0.5pt solid var(--rp-grid);vertical-align:top}
+.sheet table.t .r{text-align:right}
+.sheet table.sum{font-size:9pt;line-height:11pt}
+.sheet table.sum th,.sheet table.sum td{padding:1.8pt 4pt 1.8pt 4pt}
+.sheet .stg h3{font-size:9.5pt;font-weight:300;color:var(--rp-blue);margin:0 0 3pt;line-height:12pt}
+.sheet .stg p{font-size:9pt;line-height:14pt;margin:0 0 7pt}
+.sheet .note{font-size:7pt;color:var(--rp-sub);margin:2pt 0 0}
+.sheet .rmap{position:absolute;border:0.75pt solid #a6a6a6;background:#c8e0ea}
+.sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding-top:6pt;border-top:0.75pt solid #bfbfbf;font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
+.sheet .src img{height:24pt;width:auto;flex:none}
+.itin .info.gps{color:#1f5f8b}
+.sheet .chartcap{font-size:7pt;color:var(--rp-sub);text-align:center;margin:0}
+.sheet [contenteditable]:hover{outline:1px dashed #9fb3c8}
+.sheet [contenteditable]:focus{outline:1px solid #096fa6;background:#fffbe6}
+.mlbl{background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;font:7pt/8.4pt "Calibri Light","Calibri","Carlito",Arial,sans-serif!important;color:#333!important;
+  text-shadow:0 0 2px #fff,0 0 2px #fff,0 0 3px #fff;white-space:pre!important}
+.mlbl::before{display:none!important}
+.empty{padding:40px;text-align:center;color:#667;background:#fff;border-radius:8px}
+
+@page{size:letter;margin:0}
+@media print{
+  body{background:#fff}
+  .topbar,.inputs,.preview-note{display:none!important}
+  .layout{display:block;padding:0}
+  .preview-wrap{overflow:visible}
+  #report{display:block}
+  .sheet{box-shadow:none;break-after:page;page-break-after:always;margin:0}
+  .sheet:last-child{break-after:auto;page-break-after:auto}
+  .sheet [contenteditable]{outline:none!important;background:none!important}
+  .leaflet-control-zoom{display:none}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>Informe de Recorrido</h1>
+  <span class="sp"></span>
+  <button class="ghost" id="btnSave" type="button">Guardar datos</button>
+  <button class="ghost" id="btnOpen" type="button">Abrir datos</button>
+  <input type="file" id="fileOpen" accept=".json,application/json" hidden>
+  <label>Informe de <select id="selReport"></select></label>
+  <button id="btnGen" type="button">Generar informe</button>
+  <button id="btnPrint" type="button">Imprimir / Guardar PDF</button>
+</header>
+
+<div class="layout">
+  <div class="inputs">
+    <section class="panel">
+      <h2><span class="n">1</span> Datos del informe</h2>
+      <div class="grid3">
+        <label class="f">Periodo desde<input type="date" id="cfgFrom"></label>
+        <label class="f">Periodo hasta<input type="date" id="cfgTo"></label>
+        <label class="f">Emitido el<input type="date" id="cfgGen"></label>
+      </div>
+      <p class="hint">Si dejas el periodo vacío se usa la primera y la última fecha del itinerario.</p>
+      <div class="grid2">
+        <label class="f">Empresa (pie de página)<input id="cfgCompany"></label>
+        <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ui-muted);font-weight:600">Logo
+          <div class="row"><img id="logoPrev" class="logoprev" alt="Logo actual"><button class="btn" id="btnLogo" type="button">Cambiar</button><button class="btn danger" id="btnLogoDel" type="button">Quitar</button></div>
+          <input type="file" id="fileLogo" accept="image/*" hidden>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ui-muted);font-weight:600">Logo GPS Chile (fuente de los datos)
+          <div class="row"><img id="gpsLogoPrev" class="logoprev" alt="Logo GPS Chile"><button class="btn" id="btnGpsLogo" type="button">Cambiar</button><button class="btn" id="btnGpsLogoReset" type="button">Original</button></div>
+          <input type="file" id="fileGpsLogo" accept="image/*" hidden>
+        </div>
+        <label class="check" style="align-self:end"><input type="checkbox" id="cfgGpsShow"> Mostrar el logo GPS Chile y citar a GPS Chile como fuente</label>
+      </div>
+      <p class="hint">GPS Chile se cita como fuente solo para los viajes importados desde un archivo exportado por GPS Chile (con sus horas, km y velocidad máxima reales). Si el itinerario se ingresó a mano o se modificó, el informe dice que esos datos son estimados.</p>
+      <details>
+        <summary>Ajustes del cálculo aproximado</summary>
+        <div class="grid3">
+          <label class="f">Factor de tiempo camión<input type="number" id="cfgFactor" step="0.05" min="0.5" max="3"></label>
+          <label class="f">V. máx tope (km/h)<input type="number" id="cfgCap" step="1" min="20" max="140"></label>
+          <label class="f">País de búsqueda<select id="cfgCountry"><option value="cl">Chile</option><option value="ar">Argentina</option><option value="pe">Perú</option><option value="bo">Bolivia</option><option value="">Todos</option></select></label>
+        </div>
+        <p class="hint">El tiempo de cada viaje es el tiempo de ruta de un auto multiplicado por el factor (1.25 = un camión tarda 25% más). La velocidad máxima sale del tramo más rápido de la ruta, limitada por el tope.</p>
+        <label class="check"><input type="checkbox" id="cfgAddr"> Mostrar la dirección encontrada en el mapa en vez del nombre que escribí</label>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2><span class="n">2</span> Itinerario por patente</h2>
+      <div class="tabs" id="tabs"></div>
+      <div class="grid2">
+        <label class="f">Patente<input id="plName" placeholder="SJDR-78"></label>
+        <label class="f">Código del tracto<input id="plCode" placeholder="CK93"></label>
+      </div>
+      <div class="row" style="background:var(--ui-accent-soft);border-radius:8px;padding:10px">
+        <button class="btn primary" id="btnImport" type="button">Importar ruta desde PDF o Excel</button>
+        <button class="btn" id="btnUndoImport" type="button" hidden>Deshacer importación</button>
+        <input type="file" id="fileImport" accept=".pdf,.xlsx,.xls,.csv,application/pdf" hidden>
+        <span class="hint" style="flex-basis:100%">Acepta el PDF de viajes de la plataforma GPS, informes de recorrido como este, o una planilla Excel/CSV con columnas como Fecha, Hora, Lugar (o Desde, Hasta, Llegada, Patente, Ralentí). Las filas se cargan en la tabla para que las revises y corrijas; después pulsa "Generar informe".</span>
+      </div>
+      <p class="hint">Cada fila es una salida: el camión sale del <b>lugar</b> en la <b>fecha y hora</b> indicadas y va al lugar de la fila siguiente. La última fila es el destino final; su fecha y hora son opcionales (si las dejas vacías, se queda ahí hasta el fin del periodo). <b>Llegada</b> es la hora real de llegada al lugar siguiente (opcional; si la dejas vacía se calcula con la ruta). <b>Ralentí h</b> son las horas con motor encendido detenido en ese lugar (opcional). Escribe el lugar como quieres que aparezca en el informe, por ejemplo "Mejillones (sector Puerto Angamos)".</p>
+      <div class="itin-wrap">
+        <table class="itin">
+          <thead><tr><th>#</th><th>Fecha</th><th>Hora salida</th><th>Lugar</th><th>Llegada</th><th>Ralentí h</th><th></th></tr></thead>
+          <tbody id="itinBody"></tbody>
+        </table>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnAddRow" type="button">+ Agregar fila</button>
+        <a class="btn" id="lnkGmaps" href="#" target="_blank" rel="noopener">Ver ruta en Google Maps ↗</a>
+        <span style="flex:1"></span>
+        <button class="btn danger" id="btnDelPlate" type="button">Eliminar patente</button>
+      </div>
+      <div class="row" id="delConfirm" hidden>
+        <span class="hint" style="color:var(--ui-bad)">¿Eliminar esta patente y su itinerario?</span>
+        <button class="btn danger" id="btnDelYes" type="button">Sí, eliminar</button>
+        <button class="btn" id="btnDelNo" type="button">Cancelar</button>
+      </div>
+      <div class="pickwrap">
+        <div id="pickMap" class="pickmap" aria-label="Mapa para marcar lugares"></div>
+        <p class="hint">Haz clic en el mapa para agregar un lugar: llena la primera fila sin lugar o crea una nueva. Puedes arrastrar los números para corregir un punto. Los lugares escritos con nombre aparecen después de "Generar informe".</p>
+      </div>
+      <div class="status" id="status"></div>
+      <button class="btn primary" id="btnGen2" type="button">Generar informe</button>
+    </section>
+  </div>
+
+  <div class="preview-wrap">
+    <p class="preview-note">Vista previa en tamaño carta. Puedes corregir cualquier texto haciendo clic sobre él antes de imprimir (los cambios se pierden si vuelves a generar). Para el PDF usa "Imprimir / Guardar PDF", destino "Guardar como PDF", tamaño Carta, márgenes "Ninguno" y activa "Gráficos de fondo".</p>
+    <div id="report"><div class="empty">Ingresa el itinerario y pulsa "Generar informe".</div></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const DEFAULT_LOGO = "data:image/png;base64,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";
+const LS_KEY = "gpsRecorridoState_v2", LS_GEO = "gpsInformeGeo_v1", LS_RT = "gpsInformeRoute_v1";
+const ls = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+function p2(n){ return String(n).padStart(2,"0"); }
+const todayISO = () => { const d = new Date(); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate()); };
+
+function sampleState(){
+  return {
+    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, factor:1.25, cap:90, country:"cl", addr:false},
+    active:0, report:"active",
+    plates:[
+      {name:"SJDR-78", code:"CK93", rows:[
+        {d:"2026-11-05", t:"12:46:00", place:"Mejillones (sector Puerto Angamos)", idle:"20"},
+        {d:"2026-11-06", t:"09:50:00", place:"Cruce Ruta 5 / Sierra Gorda", idle:"6"},
+        {d:"2026-11-07", t:"09:31:00", place:"Campamento La Negra", idle:"5"},
+        {d:"2026-11-09", t:"11:33:00", place:"Taltal", idle:"3"},
+        {d:"2026-11-10", t:"10:51:00", place:"Diego de Almagro", idle:"4"},
+        {d:"2026-11-10", t:"18:22:00", place:"El Salvador", idle:"4"},
+        {d:"", t:"", place:"Diego de Almagro", idle:"3"}
+      ]}
+    ]
+  };
+}
+let S = ls.get(LS_KEY, null) || sampleState();
+function normalizeState(){
+  const d = sampleState().cfg;
+  S.cfg = Object.assign({}, d, S.cfg || {});
+  if(!S.cfg.company || S.cfg.company === "T&G Vecchtelligence") S.cfg.company = "LGO Operadores Logísticos";
+  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; } return o; })}));
+  if(S.active == null || S.active >= S.plates.length) S.active = 0;
+  if(!S.report) S.report = "active";
+}
+normalizeState();
+const geoCache = ls.get(LS_GEO, {});
+const routeCache = ls.get(LS_RT, {});
+const rowInfo = {};
+const $ = id => document.getElementById(id);
+function save(){ ls.set(LS_KEY, S); }
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function setStatus(t, bad){ const s = $("status"); s.textContent = t || ""; s.className = "status" + (bad ? " bad" : ""); }
+
+/* ---------- Formularios ---------- */
+const cfgFields = {cfgFrom:"from", cfgTo:"to", cfgGen:"gen", cfgCompany:"company", cfgFactor:"factor", cfgCap:"cap", cfgCountry:"country"};
+const DEFAULT_GPS_LOGO = "data:image/png;base64,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";
+function gpsLogoSrc(){ return S.cfg.gpsLogo || DEFAULT_GPS_LOGO; }
+function logoSrc(){ return S.cfg.logo === "" ? "" : (S.cfg.logo || DEFAULT_LOGO); }
+function loadCfg(){
+  for(const [id,k] of Object.entries(cfgFields)) $(id).value = S.cfg[k] ?? "";
+  $("cfgAddr").checked = !!S.cfg.addr;
+  const src = logoSrc(); $("logoPrev").hidden = !src; if(src) $("logoPrev").src = src;
+  $("gpsLogoPrev").src = gpsLogoSrc(); $("cfgGpsShow").checked = S.cfg.gpsShow !== false;
+}
+$("cfgGpsShow").addEventListener("change", e => { S.cfg.gpsShow = e.target.checked; save(); });
+$("btnGpsLogo").onclick = () => $("fileGpsLogo").click();
+$("btnGpsLogoReset").onclick = () => { S.cfg.gpsLogo = null; save(); loadCfg(); };
+$("fileGpsLogo").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader(); rd.onload = () => { S.cfg.gpsLogo = rd.result; save(); loadCfg(); }; rd.readAsDataURL(f); e.target.value = "";
+};
+for(const [id,k] of Object.entries(cfgFields)) $(id).addEventListener("input", e => { S.cfg[k] = (e.target.type==="number") ? parseFloat(e.target.value) : e.target.value; save(); });
+$("cfgAddr").addEventListener("change", e => { S.cfg.addr = e.target.checked; save(); });
+$("cfgCountry").addEventListener("change", () => { updateGmaps(); refreshPickMap(); });
+$("btnLogo").onclick = () => $("fileLogo").click();
+$("btnLogoDel").onclick = () => { S.cfg.logo = ""; save(); loadCfg(); };
+$("fileLogo").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader(); rd.onload = () => { S.cfg.logo = rd.result; save(); loadCfg(); }; rd.readAsDataURL(f); e.target.value = "";
+};
+
+function plate(){ return S.plates[S.active]; }
+function renderTabs(){
+  const el = $("tabs"); el.innerHTML = "";
+  S.plates.forEach((p,i) => {
+    const b = document.createElement("button"); b.type="button"; b.className="tab"+(i===S.active?" on":""); b.textContent = p.name || "(sin patente)";
+    b.onclick = () => { S.active = i; save(); renderPlate(); };
+    el.appendChild(b);
+  });
+  const add = document.createElement("button"); add.type="button"; add.className="tab"; add.textContent="+ Patente";
+  add.onclick = () => { S.plates.push({name:"", code:"", rows:[{d:"",t:"",place:"",idle:""},{d:"",t:"",place:"",idle:""}]}); S.active = S.plates.length-1; save(); renderPlate(); $("plName").focus(); };
+  el.appendChild(add);
+  renderReportSelect();
+}
+function renderReportSelect(){
+  const sel = $("selReport"), cur = S.report; sel.innerHTML = "";
+  const o = new Option("Patente seleccionada", "active"); sel.add(o);
+  S.plates.forEach((p,i) => sel.add(new Option(p.name || ("Patente " + (i+1)), String(i))));
+  if(S.plates.length > 1) sel.add(new Option("Todas", "all"));
+  sel.value = [...sel.options].some(x => x.value === cur) ? cur : "active";
+}
+$("selReport").onchange = e => { S.report = e.target.value; save(); };
+function renderPlate(){
+  renderTabs();
+  const p = plate(); $("delConfirm").hidden = true;
+  if(!p){ $("plName").value=""; $("plCode").value=""; $("itinBody").innerHTML=""; updateGmaps(); refreshPickMap(); return; }
+  $("plName").value = p.name; $("plCode").value = p.code;
+  const tb = $("itinBody"); tb.innerHTML = "";
+  p.rows.forEach((r,i) => {
+    const last = i === p.rows.length-1;
+    const tr = document.createElement("tr"); if(last) tr.className="final";
+    const info = rowInfo[S.active+"|"+i] || (r.src === "gps" && !last ? {cls:"gps", text:`Dato GPS Chile${r.file ? " (" + r.file + ")" : ""}: llega ${r.ta}${r.km ? ", " + r.km + " km" : ""}${r.vmax ? ", vel. máx. " + r.vmax + " km/h" : ""}`} : null);
+    tr.innerHTML = `<td class="idx">${i+1}</td>
+      <td><input type="date" data-k="d" value="${esc(r.d)}" aria-label="Fecha fila ${i+1}"></td>
+      <td><input type="time" step="1" data-k="t" value="${esc(r.t)}" aria-label="Hora salida fila ${i+1}"></td>
+      <td><input class="place" data-k="place" value="${esc(r.place)}" placeholder="${last?'Destino final':'Lugar de salida'}" aria-label="Lugar fila ${i+1}">
+          ${info?`<div class="info ${info.cls}">${esc(info.text)}</div>`:(last?'<div class="info">Destino final</div>':'')}</td>
+      <td>${last?'':`<input type="time" step="1" data-k="ta" value="${esc(r.ta)}" title="Hora de llegada al lugar siguiente (opcional; si la dejas vacía se calcula)" aria-label="Hora llegada fila ${i+1}">`}</td>
+      <td><input class="idle" type="number" step="0.1" min="0" data-k="idle" value="${esc(r.idle)}" aria-label="Horas de ralentí fila ${i+1}"></td>
+      <td><button class="x" type="button" title="Quitar fila" aria-label="Quitar fila ${i+1}">×</button></td>`;
+    tr.querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => {
+      r[inp.dataset.k] = inp.value; delete rowInfo[S.active+"|"+i];
+      // un dato modificado a mano deja de ser dato GPS (y el viaje que llega a este lugar también)
+      if(inp.dataset.k !== "idle"){ const un = x => { if(x && x.src){ delete x.src; delete x.km; delete x.vmax; delete x.file; } }; un(r); if(inp.dataset.k === "place") un(p.rows[i-1]); }
+      save(); if(inp.dataset.k==="place") updateGmaps();
+    }));
+    tr.querySelector("input.place").addEventListener("change", refreshPickMap);
+    tr.querySelector(".x").onclick = () => { p.rows.splice(i,1); clearInfo(); save(); renderPlate(); };
+    tb.appendChild(tr);
+  });
+  updateGmaps(); refreshPickMap();
+}
+/* ---------- Mapa para marcar lugares y enlace a Google Maps ---------- */
+const COORD_RE = /^(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)$/;
+function rowLatLon(r){
+  if(!r.place) return null; const m = r.place.trim().match(COORD_RE);
+  if(m) return [parseFloat(m[1]), parseFloat(m[2])];
+  const g = geoCache[(S.cfg.country||"") + "|" + r.place.trim().toLowerCase()];
+  if(g) return [g.lat, g.lon];
+  const z = gazLookup(r.place); return z ? [z.lat, z.lon] : null;
+}
+function updateGmaps(){
+  const a = $("lnkGmaps"), p = plate();
+  const places = p ? p.rows.filter(r => r.place && r.place.trim()).map(r => {
+    const m = r.place.trim().match(COORD_RE); if(m) return m[1] + "," + m[2];
+    return r.place.trim() + (S.cfg.country === "cl" && !/chile/i.test(r.place) ? ", Chile" : "");
+  }) : [];
+  if(places.length < 2){ a.removeAttribute("href"); a.style.opacity = .5; a.title = "Ingresa al menos dos lugares"; return; }
+  a.style.opacity = 1; a.title = places.length > 10 ? "Google Maps muestra hasta 10 lugares; se abren los primeros 10" : "";
+  const pl = places.slice(0, 10);
+  const u = new URL("https://www.google.com/maps/dir/");
+  u.searchParams.set("api","1"); u.searchParams.set("origin", pl[0]); u.searchParams.set("destination", pl[pl.length-1]);
+  if(pl.length > 2) u.searchParams.set("waypoints", pl.slice(1,-1).join("|"));
+  u.searchParams.set("travelmode","driving");
+  a.href = u.toString();
+}
+let pickMap = null, pickLayer = null, pickFitFor = null;
+function initPickMap(){
+  if(typeof L === "undefined" || pickMap) return;
+  pickMap = L.map("pickMap", {zoomSnap:0.5, renderer: L.svg({padding:1.5})}).setView([-20.6,-69.4], 7);
+  addBaseMap(pickMap);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:18, subdomains:"abc", attribution:"© OpenStreetMap"}).addTo(pickMap);
+  pickLayer = L.layerGroup().addTo(pickMap);
+  pickMap.on("click", e => {
+    const p = plate(); if(!p) return;
+    const txt = e.latlng.lat.toFixed(5) + ", " + e.latlng.lng.toFixed(5);
+    let r = p.rows.find(r => !r.place || !r.place.trim());
+    if(!r){ const last = p.rows[p.rows.length-1] || {}; r = {d:last.d||"", t:"", place:""}; p.rows.push(r); }
+    r.place = txt; clearInfo(); save(); renderPlate();
+  });
+}
+function refreshPickMap(){
+  initPickMap(); if(!pickMap) return;
+  pickLayer.clearLayers();
+  const p = plate(); if(!p) return;
+  const pts = [];
+  p.rows.forEach((r, i) => {
+    const ll = rowLatLon(r); if(!ll) return; pts.push(ll);
+    const last = i === p.rows.length-1;
+    const mk = L.marker(ll, {draggable:true, icon: L.divIcon({className:"", html:`<div class="num${last?" last":""}">${i+1}</div>`, iconSize:[22,22], iconAnchor:[11,11]})})
+      .bindTooltip(`${i+1}. ${r.place}`).addTo(pickLayer);
+    mk.on("dragend", ev => { const q = ev.target.getLatLng(); r.place = q.lat.toFixed(5) + ", " + q.lng.toFixed(5); clearInfo(); save(); renderPlate(); });
+  });
+  if(pickFitFor !== S.active && pts.length){ pickMap.fitBounds(L.latLngBounds(pts), {padding:[30,30], maxZoom:11, animate:false}); pickFitFor = S.active; }
+  if(pts.length > 1) L.polyline(pts, {color:"#1f4e78", weight:2, dashArray:"5 6", interactive:false}).addTo(pickLayer);
+  setTimeout(() => { pickMap.invalidateSize(); pickMap.fire("moveend"); }, 0);
+}
+
+function clearInfo(){ for(const k in rowInfo) if(k.startsWith(S.active+"|")) delete rowInfo[k]; }
+$("plName").addEventListener("input", e => { plate().name = e.target.value.trim().toUpperCase(); save(); renderTabs(); });
+$("plName").addEventListener("change", e => { e.target.value = plate().name; });
+$("plCode").addEventListener("input", e => { plate().code = e.target.value.trim().toUpperCase(); save(); });
+$("plCode").addEventListener("change", e => { e.target.value = plate().code; });
+$("btnAddRow").onclick = () => {
+  const p = plate(); if(!p) return; const last = p.rows[p.rows.length-1] || {};
+  p.rows.push({d:last.d||"", t:"", place:"", idle:""}); save(); renderPlate();
+};
+$("btnDelPlate").onclick = () => { $("delConfirm").hidden = false; };
+$("btnDelNo").onclick = () => { $("delConfirm").hidden = true; };
+$("btnDelYes").onclick = () => { S.plates.splice(S.active,1); S.active = Math.max(0, S.active-1); for(const k in rowInfo) delete rowInfo[k]; save(); renderPlate(); };
+$("btnSave").onclick = () => {
+  const blob = new Blob([JSON.stringify(S,null,2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "datos-recorrido-" + S.plates.map(p=>p.name).filter(Boolean).join("_") + ".json";
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+};
+$("btnOpen").onclick = () => $("fileOpen").click();
+$("fileOpen").onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{ const st = JSON.parse(await f.text()); if(!st.plates) throw 0; S = st; normalizeState(); save(); loadCfg(); renderPlate(); setStatus("Datos cargados desde " + f.name + "."); }
+  catch(err){ setStatus("El archivo no tiene el formato de datos de esta página.", true); }
+  e.target.value = "";
+};
+
+/* ---------- Geocodificación: Nominatim → Photon → lista incluida ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let lastNominatim = 0, geoNetFail = false, routeNetFail = false;
+async function getJSON(url, timeoutMs){
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), timeoutMs || 12000);
+  try{ const r = await fetch(url, {signal:ctl.signal, referrerPolicy:"no-referrer-when-downgrade"}); if(!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+  finally{ clearTimeout(tm); }
+}
+async function nominatim(url){
+  const wait = 1100 - (Date.now() - lastNominatim); if(wait > 0) await sleep(wait);
+  lastNominatim = Date.now();
+  return getJSON(url + "&accept-language=es");
+}
+// Lugares frecuentes del norte de Chile (coordenadas aproximadas), por si no hay buscador disponible
+const GAZ = [
+  ["pozo almonte",-20.2567,-69.7856,"Bypass Pozo Almonte, Pozo Almonte, Tarapacá, Chile"],
+  ["iquique",-20.2141,-70.1522,"Iquique, Tarapacá, Chile"],
+  ["alto hospicio",-20.2700,-70.1000,"Alto Hospicio, Tarapacá, Chile"],
+  ["pica",-20.4895,-69.3297,"Pica, Tarapacá, Chile"],
+  ["matilla",-20.5150,-69.3610,"Matilla, Pica, Tarapacá, Chile"],
+  ["la tirana",-20.3410,-69.6550,"La Tirana, Pozo Almonte, Tarapacá, Chile"],
+  ["huara",-19.9960,-69.7710,"Huara, Tarapacá, Chile"],
+  ["collahuasi",-20.9870,-68.6460,"Minera Doña Inés de Collahuasi, Pica, Tarapacá, Chile"],
+  ["quebrada blanca",-21.0000,-68.8000,"Quebrada Blanca, Pica, Tarapacá, Chile"],
+  ["cerro colorado",-20.0500,-69.2500,"Cerro Colorado, Pozo Almonte, Tarapacá, Chile"],
+  ["arica",-18.4780,-70.3210,"Arica, Arica y Parinacota, Chile"],
+  ["quillagua",-21.6560,-69.5430,"Quillagua, María Elena, Antofagasta, Chile"],
+  ["maria elena",-22.3460,-69.6630,"Ruta 5 Norte, María Elena, Antofagasta, Chile"],
+  ["tocopilla",-22.0920,-70.1980,"Tocopilla, Antofagasta, Chile"],
+  ["chuquicamata",-22.3150,-68.9260,"Chuquicamata, Calama, Antofagasta, Chile"],
+  ["ministro hales",-22.3800,-68.9000,"Ministro Hales, Calama, Antofagasta, Chile"],
+  ["calama",-22.4560,-68.9290,"Calama, Antofagasta, Chile"],
+  ["sierra gorda",-22.8930,-69.3200,"Sierra Gorda, Antofagasta, Chile"],
+  ["spence",-22.8000,-69.2700,"Minera Spence, Sierra Gorda, Antofagasta, Chile"],
+  ["baquedano",-23.3370,-69.8450,"Baquedano, Sierra Gorda, Antofagasta, Chile"],
+  ["mejillones",-23.1000,-70.4500,"Mejillones, Antofagasta, Chile"],
+  ["angamos",-23.0700,-70.3880,"Puerto Angamos, Mejillones, Antofagasta, Chile"],
+  ["la negra",-23.7560,-70.3080,"La Negra, Antofagasta, Chile"],
+  ["agua verde",-25.3900,-69.9700,"Agua Verde, Taltal, Antofagasta, Chile"],
+  ["posada sarita",-23.4500,-70.0500,"Posada Sarita, Ruta 5, Antofagasta, Chile"],
+  ["mantos blancos",-23.4370,-70.0670,"Mantos Blancos, Antofagasta, Chile"],
+  ["antofagasta",-23.6500,-70.4000,"Antofagasta, Antofagasta, Chile"],
+  ["escondida",-24.2700,-69.0700,"Minera Escondida, Antofagasta, Chile"],
+  ["taltal",-25.4050,-70.4850,"Taltal, Antofagasta, Chile"],
+  ["rajo inca",-26.2500,-69.6200,"Rajo Inca, Diego de Almagro, Atacama, Chile"],
+  ["el salvador",-26.2480,-69.6250,"El Salvador, Diego de Almagro, Atacama, Chile"],
+  ["diego de almagro",-26.3900,-70.0500,"Diego de Almagro, Atacama, Chile"],
+  ["chanaral",-26.3470,-70.6220,"Chañaral, Atacama, Chile"],
+  ["copiapo",-27.3668,-70.3314,"Copiapó, Atacama, Chile"],
+  ["la serena",-29.9045,-71.2489,"La Serena, Coquimbo, Chile"],
+  ["santiago",-33.4489,-70.6693,"Santiago, Región Metropolitana, Chile"]
+];
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+function gazLookup(place){
+  const n = norm(place); let best = null;
+  for(const g of GAZ){ if(n.includes(g[0]) && (!best || g[0].length > best[0].length)) best = g; }
+  return best ? {lat:best[1], lon:best[2], addr:best[3], src:"lista"} : null;
+}
+function gazNearest(lat, lon){
+  let best = null, bd = 1e9; for(const g of GAZ){ const d = hav({lat,lon},{lat:g[1],lon:g[2]}); if(d < bd){ bd = d; best = g; } }
+  return best && bd < 25 ? best[3] : null;
+}
+function fmtAddress(a, name){
+  if(!a) return name || "";
+  const town = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb || a.county || "";
+  let first = a.road || "";
+  if(!first && name && name !== town) first = name;
+  if(!first && (a.amenity || a.industrial || a.building)) first = a.amenity || a.industrial || a.building;
+  const parts = [first, town, a.state || a.region || "", a.country || ""].filter(Boolean);
+  return parts.filter((v,i) => parts.indexOf(v) === i).join(", ");
+}
+function fmtPhoton(p){
+  const town = p.city || p.district || p.county || "";
+  const first = p.street || (p.name && p.name !== town ? p.name : "");
+  const parts = [first, town, p.state || "", p.country || ""].filter(Boolean);
+  return parts.filter((v,i) => parts.indexOf(v) === i).join(", ");
+}
+async function reverseAny(lat, lon){
+  try{ const j = await nominatim(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=17&lat=${lat}&lon=${lon}`); if(j && j.address) return fmtAddress(j.address, j.name); }catch(e){ geoNetFail = true; }
+  try{ const j = await getJSON(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&limit=1`); if(j.features && j.features.length) return fmtPhoton(j.features[0].properties); }catch(e){ geoNetFail = true; }
+  return gazNearest(lat, lon);
+}
+async function searchNominatim(place, country){
+  const j = await nominatim(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&q=${encodeURIComponent(place)}` + (country ? `&countrycodes=${country}` : ""));
+  if(!j || !j.length) return null;
+  const h = j[0], lat = parseFloat(h.lat), lon = parseFloat(h.lon);
+  let addr = fmtAddress(h.address, h.name);
+  if(h.address && !h.address.road){
+    try{
+      const rv = await nominatim(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=17&lat=${lat}&lon=${lon}`);
+      if(rv && rv.address && rv.address.road){
+        const town = h.address.city || h.address.town || h.address.village || h.address.municipality || "";
+        const isPlace = ["city","town","village","hamlet","municipality","administrative"].includes(h.addresstype || h.type);
+        addr = isPlace ? fmtAddress(rv.address, "") : fmtAddress(Object.assign({}, h.address, {road: h.name && h.name !== town ? h.name : rv.address.road}), h.name);
+      }
+    }catch(e){}
+  }
+  return {lat, lon, addr, src:"osm"};
+}
+async function searchPhoton(place, country){
+  const j = await getJSON(`https://photon.komoot.io/api/?q=${encodeURIComponent(place)}&limit=5&lat=-22&lon=-69.5`);
+  const COUNTRY = {cl:"CL", ar:"AR", pe:"PE", bo:"BO"}[country];
+  const f = (j.features || []).find(x => !COUNTRY || x.properties.countrycode === COUNTRY);
+  if(!f) return null;
+  return {lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0], addr:fmtPhoton(f.properties), src:"photon"};
+}
+async function geocode(place, country){
+  const key = (country||"") + "|" + place.trim().toLowerCase();
+  if(geoCache[key]) return geoCache[key];
+  const m = place.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)$/);
+  let res = null;
+  if(m){
+    const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+    res = {lat, lon, addr: (await reverseAny(lat, lon)) || `${lat.toFixed(5)}, ${lon.toFixed(5)}`};
+  }else{
+    const q = place.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim() || place.trim();
+    try{ res = await searchNominatim(q, country); }catch(e){ geoNetFail = true; }
+    if(!res){ try{ res = await searchPhoton(q, country); }catch(e){ geoNetFail = true; } }
+    if(!res) res = gazLookup(place);
+    if(!res) return null;
+  }
+  if(res.src !== "lista") { geoCache[key] = res; ls.set(LS_GEO, geoCache); }
+  return res;
+}
+
+/* ---------- Ruta (OSRM sobre OpenStreetMap) ---------- */
+const hav = (a,b) => { const R=6371, r=Math.PI/180, dLa=(b.lat-a.lat)*r, dLo=(b.lon-a.lon)*r;
+  const h = Math.sin(dLa/2)**2 + Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLo/2)**2; return 2*R*Math.asin(Math.sqrt(h)); };
+async function route(a, b){
+  const key = [a.lat,a.lon,b.lat,b.lon].map(v => v.toFixed(5)).join(",");
+  if(routeCache[key]) return routeCache[key];
+  let res;
+  try{
+    const path = `${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson&annotations=distance,duration`;
+    let j = null;
+    for(const host of ["https://router.project-osrm.org/route/v1/driving/", "https://routing.openstreetmap.de/routed-car/route/v1/driving/"]){
+      try{ j = await getJSON(host + path, 20000); if(j.code === "Ok" && j.routes.length) break; j = null; }catch(e){ j = null; }
+    }
+    if(!j) throw new Error("sin ruta");
+    const rt = j.routes[0];
+    // velocidad máxima: tramos de al menos 1,5 km
+    let best = 0, dAcc = 0, tAcc = 0;
+    for(const leg of rt.legs){ const an = leg.annotation || {}; const D = an.distance || [], T = an.duration || [];
+      for(let i=0;i<D.length;i++){ dAcc += D[i]; tAcc += T[i]; if(dAcc >= 1500){ if(tAcc>0) best = Math.max(best, dAcc/tAcc*3.6); dAcc = 0; tAcc = 0; } } }
+    const avg = rt.duration > 0 ? rt.distance/rt.duration*3.6 : 0;
+    // geometría simplificada para guardar en caché
+    const coords = rt.geometry.coordinates; const step = Math.max(1, Math.floor(coords.length/600));
+    const geom = coords.filter((c,i) => i % step === 0 || i === coords.length-1).map(c => [+c[1].toFixed(5), +c[0].toFixed(5)]);
+    res = {km: rt.distance/1000, sec: rt.duration, vmax: Math.max(best, avg), geom, approx:false};
+  }catch(e){
+    // sin servicio de rutas: línea recta x 1.3 a 60 km/h
+    const km = hav(a,b) * 1.3;
+    res = {km, sec: km/60*3600, vmax: 70, geom: [[a.lat,a.lon],[b.lat,b.lon]], approx:true};
+    return res; // no se guarda en caché para reintentar después
+  }
+  routeCache[key] = res;
+  const keys = Object.keys(routeCache); if(keys.length > 300) delete routeCache[keys[0]];
+  ls.set(LS_RT, routeCache);
+  return res;
+}
+
+
+/* ---------- Formatos ---------- */
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function parseDT(d, t){ if(!d) return null; const [Y,M,D] = d.split("-").map(Number); const [h,m,s] = (t||"00:00:00").split(":").map(Number); return new Date(Y, M-1, D, h||0, m||0, s||0); }
+const dm = d => p2(d.getDate())+"-"+p2(d.getMonth()+1);
+const hm = d => p2(d.getHours())+":"+p2(d.getMinutes());
+const dmhm = d => dm(d)+" "+hm(d);
+const fDate = d => dm(d)+"-"+d.getFullYear();
+const dec1 = x => (Math.round(x*10)/10).toFixed(1).replace(".", ",");
+const H = 3600e3, DAY = 86400e3;
+function periodLong(a, b){
+  if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth()) return `${p2(a.getDate())} al ${p2(b.getDate())} de ${MESES[b.getMonth()]} de ${b.getFullYear()}`;
+  if(a.getFullYear()===b.getFullYear()) return `${p2(a.getDate())} de ${MESES[a.getMonth()]} al ${p2(b.getDate())} de ${MESES[b.getMonth()]} de ${b.getFullYear()}`;
+  return `${p2(a.getDate())} de ${MESES[a.getMonth()]} de ${a.getFullYear()} al ${p2(b.getDate())} de ${MESES[b.getMonth()]} de ${b.getFullYear()}`;
+}
+function periodShort(a, b){ return (a.getMonth()===b.getMonth() && a.getFullYear()===b.getFullYear()) ? `${p2(a.getDate())} al ${fDate(b)}` : `${dm(a)} al ${fDate(b)}`; }
+function dayRange(a, b){ // 01 al 05-11
+  if(+a === +b) return dm(a);
+  return a.getMonth()===b.getMonth() ? `${p2(a.getDate())} al ${dm(b)}` : `${dm(a)} al ${dm(b)}`;
+}
+function daysText(list){ // lista de días (Date) -> "01 al 05-11", "05 y 06-11", "08-11"
+  if(!list.length) return "";
+  const out = []; let s = list[0], prev = list[0];
+  const flush = () => {
+    if(+s === +prev) out.push(dm(s));
+    else if(+prev - +s === DAY) out.push(s.getMonth()===prev.getMonth() ? `${p2(s.getDate())} y ${dm(prev)}` : `${dm(s)} y ${dm(prev)}`);
+    else out.push(dayRange(s, prev));
+  };
+  for(let i=1;i<list.length;i++){ if(+list[i] - +prev === DAY){ prev = list[i]; } else { flush(); s = prev = list[i]; } }
+  flush(); return out.join(", ");
+}
+function joinY(list){ return list.length <= 1 ? (list[0]||"") : list.slice(0,-1).join(", ") + " y " + list[list.length-1]; }
+const shortName = s => String(s).split(/\s*[(,]/)[0].trim() || String(s);
+const ov = (a, b, s, e) => Math.max(0, Math.min(+b, +e) - Math.max(+a, +s));
+
+/* ---------- Cálculo del recorrido ---------- */
+async function computePlate(pi){
+  const p = S.plates[pi], cfg = S.cfg, errors = [];
+  const tag = p.name || ("Patente " + (pi+1));
+  const rows = p.rows.filter(r => r.place && r.place.trim());
+  if(rows.length < 2) return {p, errors:[`${tag}: ingresa al menos dos lugares.`]};
+  const pts = [];
+  for(let i=0;i<p.rows.length;i++){
+    const r = p.rows[i]; if(!r.place || !r.place.trim()) continue;
+    setStatus(`Buscando "${r.place}" (${tag})…`);
+    let g = null; try{ g = await geocode(r.place, cfg.country); }catch(e){ g = null; }
+    if(!g){ rowInfo[pi+"|"+i] = {cls:"bad", text:"Lugar no encontrado. Márcalo con clic en el mapa o escribe \"lugar, comuna\"."}; errors.push(`${tag}: no se encontró "${r.place}"; márcalo en el mapa.`); continue; }
+    rowInfo[pi+"|"+i] = {cls:"ok", text:g.addr + (g.src === "lista" ? " (ubicación aproximada de la lista incluida)" : "")};
+    pts.push({i, row:r, g, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: cfg.addr ? g.addr : r.place.trim()});
+  }
+  const trips = [], stops = [];
+  for(let k=0;k<pts.length-1;k++){
+    const A = pts[k], B = pts[k+1];
+    if(!A.dep){ rowInfo[pi+"|"+A.i] = {cls:"bad", text:"Falta la fecha u hora de salida."}; errors.push(`${tag}: fila ${A.i+1} sin fecha de salida.`); continue; }
+    setStatus(`Calculando ruta ${A.row.place} → ${B.row.place} (${tag})…`);
+    const rt = await route(A.g, B.g);
+    const sec = rt.sec * (cfg.factor || 1);
+    let end = new Date(A.dep.getTime() + Math.round(sec)*1000);
+    if(A.row.ta){ // hora de llegada ingresada o importada
+      const e2 = parseDT(A.row.d, A.row.ta); if(e2 <= A.dep) e2.setDate(e2.getDate()+1);
+      if(e2 - A.dep < 4*DAY) end = e2;
+    }
+    const gkm = parseFloat(A.row.km), gv = parseFloat(A.row.vmax);
+    if(A.row.src === "gps" && A.row.ta && end > A.dep && gkm >= 0 && gv >= 0){ // viaje de la exportación GPS: valores reales
+      trips.push({start:A.dep, end, from:A.label, to:B.label, km:gkm, vmax:gv, geom:rt.geom, a:A, b:B, gps:true, file:A.row.file || ""});
+      continue;
+    }
+    if(rt.approx) routeNetFail = true;
+    const vmax = Math.max(rt.km/((end-A.dep)/H || 1), Math.min(cfg.cap || 90, rt.vmax / (cfg.factor || 1) + 6));
+    trips.push({start:A.dep, end, from:A.label, to:B.label, km:rt.km, vmax:Math.min(vmax, cfg.cap||90), geom:rt.geom, a:A, b:B, gps:false, taManual:!!A.row.ta});
+    if(B.dep && B.dep < end){ rowInfo[pi+"|"+B.i] = {cls:"bad", text:`La salida (${hm(B.dep)}) es antes de la llegada estimada (${dmhm(end)}).`}; errors.push(`${tag}: fila ${B.i+1} sale antes de la llegada estimada ${dmhm(end)}.`); }
+  }
+  return {p, pts, trips, errors};
+}
+function buildStops(r, from, to){
+  // detenciones: antes de la primera salida, entre viajes y después de la última llegada
+  const stops = [], T = r.trips; if(!T.length) return stops;
+  const first = T[0];
+  if(first.start > from) stops.push({start:from, end:first.start, loc:first.from, pt:first.a, idle:first.a.idle});
+  for(let k=0;k<T.length;k++){
+    const t = T[k], nx = T[k+1];
+    const end = nx ? nx.start : (t.b.dep && t.b.dep > t.end ? t.b.dep : to);
+    if(end > t.end) stops.push({start:t.end, end, loc:t.to, pt:t.b, idle:t.b.idle});
+  }
+  return stops;
+}
+function analyze(r, from, to){
+  const days = []; for(let d = new Date(from); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate()+1)) days.push(d);
+  const stops = buildStops(r, from, to);
+  const stat = days.map(d => ({d, ds:+d, de:+d + DAY, km:0, mov:0, idle:0, vmax:0, places:[], starts:[], arrivals:[]}));
+  for(const t of r.trips){
+    const dur = t.end - t.start || 1;
+    for(const s of stat){ const o = ov(t.start, t.end, s.ds, s.de); if(o > 0){ s.km += t.km*o/dur; s.mov += o/H; s.vmax = Math.max(s.vmax, t.vmax); } }
+    const sd = stat.find(s => +t.start >= s.ds && +t.start < s.de); if(sd) sd.starts.push(t);
+    const ad = stat.find(s => +t.end >= s.ds && +t.end < s.de); if(ad && ad !== sd) ad.arrivals.push(t);
+  }
+  for(const st of stops){
+    const dur = st.end - st.start || 1;
+    for(const s of stat){ const o = ov(st.start, st.end, s.ds, s.de); if(o > 0){ s.idle += st.idle*o/dur; if(dur >= 30*60e3) s.places.push(st.loc); } }
+  }
+  for(const s of stat){
+    if(!s.places.length){ const t = r.trips.find(t => ov(t.start, t.end, s.ds, s.de) > 0); if(t) s.places.push(t.from); }
+    s.places = s.places.filter((v,i,a) => i === 0 || a[i-1] !== v);
+  }
+  const vt = r.trips.filter(t => t.end >= from && t.start <= to);
+  const det = stops.map(st => ({start:new Date(Math.max(+st.start, +from)), end:new Date(Math.min(+st.end, +to)), loc:st.loc}))
+                   .filter(st => st.end - st.start >= H);
+  const tot = {km: stat.reduce((a,s)=>a+Math.round(s.km),0), mov: stat.reduce((a,s)=>a+s.mov,0), idle: stat.reduce((a,s)=>a+s.idle,0),
+               vmax: Math.max(0, ...stat.map(s=>s.vmax)), days: stat.filter(s => s.km >= 1).length};
+  tot.motor = tot.mov + tot.idle;
+  return {days, stat, stops, vt, det, tot};
+}
+function routeSummary(an, from){
+  const big = an.stops.filter(s => s.end - s.start >= 4*H);
+  const groups = [];
+  for(const s of big){
+    const g = groups[groups.length-1], nm = shortName(s.loc);
+    const sd = new Date(Math.max(+s.start, +from)), ed = new Date(s.end - 1);
+    if(g && g.name === nm){ g.end = ed; } else groups.push({name:nm, start:sd, end:ed, atStart: +s.start <= +from});
+  }
+  const parts = groups.map(g => {
+    const a = new Date(g.start.getFullYear(), g.start.getMonth(), g.start.getDate()), b = new Date(g.end.getFullYear(), g.end.getMonth(), g.end.getDate());
+    if(g.atStart && +b > +a) return `${g.name} hasta el ${dm(b)}`;
+    if(+a === +b) return `${g.name} el ${dm(a)}`;
+    if(+b - +a === DAY) return `${g.name} el ${a.getMonth()===b.getMonth() ? p2(a.getDate()) : dm(a)} y ${dm(b)}`;
+    return `${g.name} del ${a.getMonth()===b.getMonth() ? p2(a.getDate()) : dm(a)} al ${dm(b)}`;
+  });
+  return parts.length ? "Ruta del período: " + joinY(parts) + "." : "Ruta del período: sin viajes en el período.";
+}
+function stagesOf(an, r){
+  const out = [], st = an.stat; let i = 0;
+  const placeAt = s => s.places[s.places.length-1] || "";
+  while(i < st.length){
+    const s = st[i];
+    if(!s.starts.length && !s.arrivals.length && s.km < 1){
+      let j = i; while(j+1 < st.length && !st[j+1].starts.length && !st[j+1].arrivals.length && st[j+1].km < 1) j++;
+      const pl = placeAt(s) || placeAt(st[j]);
+      out.push({h: dayRange(st[i].d, st[j].d), p: j > i ? `${pl}. No sale en esos días.` : `Detenido todo el día en ${pl}.`});
+      i = j + 1; continue;
+    }
+    const sent = [];
+    for(const t of s.arrivals) sent.push(`Llega a las ${hm(t.end)} a ${t.to}`);
+    s.starts.forEach((t, k) => {
+      const nextDay = +t.end >= s.de;
+      const arr = nextDay ? `llega el ${dm(t.end)} a las ${hm(t.end)}` : `llega a las ${hm(t.end)}`;
+      sent.push(k === 0 && !s.arrivals.length ? `Sale a las ${hm(t.start)} desde ${t.from} y ${arr} a ${t.to}` : `Vuelve a salir a las ${hm(t.start)} y ${arr} a ${t.to}`);
+    });
+    let txt = sent.join(". ");
+    const lastT = s.starts[s.starts.length-1] || s.arrivals[s.arrivals.length-1];
+    if(lastT && +lastT.end < s.de){ const nxt = r.trips[r.trips.indexOf(lastT)+1]; if(!nxt || +nxt.start >= s.de) txt += ", donde pasa la noche"; }
+    out.push({h: dm(s.d), p: txt + "."});
+    i++;
+  }
+  return out;
+}
+
+/* ---------- Armado de hojas (paginación manual, tamaño carta) ---------- */
+const PT = 4/3; // px por pt en pantalla
+let maps = [];
+function newSheet(opts){
+  const sh = document.createElement("section"); sh.className = "sheet";
+  if(opts.bars) sh.insertAdjacentHTML("beforeend", `<div class="bars"><i style="height:28pt;background:var(--rp-blue)"></i><i style="height:24pt;background:var(--rp-blue2)"></i><i style="height:28pt;background:var(--rp-blue3)"></i></div>`);
+  if(opts.logo && logoSrc()) sh.insertAdjacentHTML("beforeend", `<img class="logo" src="${logoSrc()}" alt="">`);
+  if(opts.foot) sh.insertAdjacentHTML("beforeend", `<div class="foot">${esc(opts.foot)}</div>`);
+  $("report").appendChild(sh); return sh;
+}
+function addBox(sh, b){ const d = document.createElement("div"); d.className = "box"; Object.assign(d.style, {left:b.left+"pt", top:b.top+"pt", width:b.width+"pt", height:b.height+"pt"}); sh.appendChild(d); return d; }
+const over = box => box.scrollHeight > box.clientHeight + 1;
+// coloca bloques en cajas; si no caben, sigue en hojas nuevas
+function flow(blocks, firstBox, contBox, sheetOpts, firstSheet){
+  let sh = firstSheet || newSheet(sheetOpts.first), box = addBox(sh, firstBox);
+  const next = () => { sh = newSheet(sheetOpts.cont); box = addBox(sh, contBox); };
+  for(const b of blocks){
+    if(b.table){
+      const mk = (withHead) => { const t = document.createElement("table"); t.className = "t " + (b.cls||""); t.style.width = b.width + "pt";
+        t.innerHTML = `<colgroup>${b.cols.map(c => `<col style="width:${c}pt">`).join("")}</colgroup>` + (withHead ? `<thead>${b.head}</thead>` : "") + "<tbody></tbody>"; return t; };
+      let t = mk(true); if(b.before) t.style.marginTop = b.before + "pt"; box.appendChild(t);
+      let tb = t.tBodies[0], n = 0;
+      for(const row of b.rows){
+        tb.insertAdjacentHTML("beforeend", row);
+        if(over(box)){
+          tb.lastElementChild.remove();
+          if(n === 0){ // ni el encabezado + primera fila caben: mover título y tabla
+            t.remove(); const moved = b.keepWith ? box.lastElementChild : null; if(moved) moved.remove();
+            next(); if(moved) box.appendChild(moved); t = mk(true); box.appendChild(t); tb = t.tBodies[0]; tb.insertAdjacentHTML("beforeend", row);
+          } else { next(); t = mk(false); box.appendChild(t); tb = t.tBodies[0]; tb.insertAdjacentHTML("beforeend", row); }
+        }
+        n++;
+      }
+      if(b.after) t.style.marginBottom = b.after + "pt";
+    } else {
+      const w = document.createElement("div"); w.innerHTML = b.html; const el = w.firstElementChild;
+      box.appendChild(el);
+      if(over(box)){ el.remove(); next(); box.appendChild(el); }
+    }
+  }
+  return sh;
+}
+
+async function generate(){
+  if(!S.plates.length){ setStatus("Agrega al menos una patente.", true); return; }
+  const which = S.report === "all" ? S.plates.map((_,i)=>i) : [S.report === "active" ? S.active : +S.report].filter(i => S.plates[i]);
+  ["btnGen","btnGen2"].forEach(id => $(id).disabled = true);
+  for(const k in rowInfo) delete rowInfo[k];
+  geoNetFail = false; routeNetFail = false;
+  const results = [], errors = [];
+  try{
+    for(const i of which){ const r = await computePlate(i); errors.push(...r.errors); if(r.trips && r.trips.length) results.push(r); }
+  }finally{ ["btnGen","btnGen2"].forEach(id => $(id).disabled = false); }
+  if(geoNetFail) errors.unshift("No hubo conexión con el buscador de lugares en internet, así que se usaron ubicaciones aproximadas de la lista incluida (puedes corregirlas en el mapa).");
+  if(routeNetFail) errors.unshift("No hubo conexión con el servicio de rutas, así que algunos km y horas se estimaron en línea recta.");
+  renderPlate();
+  if(!results.length){ setStatus(errors.join(" ") || "No hay datos.", true); return; }
+  try{ await document.fonts.ready; }catch(e){}
+  maps.forEach(m => m.remove()); maps = [];
+  $("report").innerHTML = "";
+  for(const r of results) renderReport(r);
+  const r0 = results[0];
+  document.title = results.length === 1 ? `Recorrido ${r0.p.code ? r0.p.code + " " : ""}${r0.p.name} ${r0.periodTag}` : `Recorrido ${results.map(r => r.p.name).join(" ")} ${r0.periodTag}`;
+  setStatus(errors.length ? "Informe generado con avisos: " + errors.join(" ") : "Informe generado. Revisa la vista previa y usa \"Imprimir / Guardar PDF\".", errors.length > 0);
+}
+
+function renderReport(r){
+  const cfg = S.cfg;
+  const allStart = r.trips[0].start, allEnd = r.trips[r.trips.length-1].end;
+  let from = cfg.from ? parseDT(cfg.from) : allStart, to = cfg.to ? parseDT(cfg.to) : allEnd;
+  from = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  to = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59);
+  r.periodTag = `${p2(from.getDate())}-${fDate(to)}`;
+  const an = analyze(r, from, to);
+  const code = r.p.code || r.p.name, name = r.p.name || "";
+  const gen = cfg.gen ? fDate(parseDT(cfg.gen)) : fDate(new Date());
+  const foot = cfg.company ? `${cfg.company} · Recorrido ${code}, ${periodShort(from, to)}` : "";
+  const CE = 'contenteditable="true" spellcheck="false"';
+
+  /* Hoja 1: resumen y kilómetros por día */
+  const s1 = newSheet({foot});
+  const b1 = addBox(s1, {left:56.9, top:106, width:498, height:640});
+  const T = an.tot;
+  const sumRows = [["Kilómetros recorridos", Math.round(T.km)], ["Horas de motor", dec1(T.motor)], ["Horas en movimiento", dec1(T.mov)],
+    ["Horas en ralentí (motor encendido detenido)", dec1(T.idle)], ["Velocidad máxima", Math.round(T.vmax) + " km/h"], ["Días con viaje", T.days]];
+  b1.innerHTML = `<h1 class="title" ${CE}>Recorrido tracto ${esc(code)} · Patente ${esc(name)}</h1>
+    <p class="sub" ${CE}>Período: ${periodLong(from, to)} · Emitido el ${gen}</p>
+    <h2 class="sec" style="margin-top:13pt" ${CE}>Resumen</h2>
+    <table class="t sum" style="width:424pt;margin:8pt 0 0 37.5pt" ${CE}><colgroup><col style="width:281.6pt"><col style="width:142.4pt"></colgroup>
+      <thead><tr><th>Dato</th><th class="r">${esc(code)}</th></tr></thead>
+      <tbody>${sumRows.map(x => `<tr><td>${x[0]}</td><td class="r">${x[1]}</td></tr>`).join("")}</tbody></table>
+    <p class="txt" style="margin-top:20pt" ${CE}>${esc(routeSummary(an, from))}</p>
+    <h2 class="sec" style="margin-top:20pt" ${CE}>Kilómetros por día</h2>
+    ${chartSVG(an.stat)}
+    <p class="chartcap" ${CE}>Kilómetros por día.</p>
+    ${sourceHTML(r, an)}`;
+
+  /* Hoja 2: recorrido por etapas con mapa */
+  const s2 = newSheet({bars:true, foot});
+  const b2 = addBox(s2, {left:56.7, top:106, width:498, height:30}); b2.innerHTML = `<h2 class="sec" ${CE}>Recorrido por etapas</h2>`;
+  const geomAll = r.trips.filter(t => t.end >= from && t.start <= to).flatMap(t => t.geom);
+  const lats = geomAll.map(c => c[0]), lons = geomAll.map(c => c[1]);
+  const midLat = (Math.min(...lats)+Math.max(...lats))/2;
+  const wide = (Math.max(...lons)-Math.min(...lons))*Math.cos(midLat*Math.PI/180) > (Math.max(...lats)-Math.min(...lats))*1.1;
+  const mapBox = wide ? {left:74.4, top:133, width:463, height:300} : {left:74.4, top:137.6, width:190.4, height:539};
+  const md = document.createElement("div"); md.className = "rmap"; Object.assign(md.style, {left:mapBox.left+"pt", top:mapBox.top+"pt", width:mapBox.width+"pt", height:mapBox.height+"pt"}); s2.appendChild(md);
+  const stg = stagesOf(an, r);
+  const stBlocks = stg.map(x => ({html:`<div class="stg"><h3 ${CE}>${esc(x.h)}</h3><p ${CE}>${esc(x.p)}</p></div>`}));
+  stBlocks.push({html:`<p class="note" ${CE}>Fondo del mapa: OpenStreetMap.</p>`});
+  const textBox = wide ? {left:74.4, top:450, width:463, height:290} : {left:300.6, top:131, width:254, height:610};
+  flow(stBlocks, textBox, {left:300.6, top:106, width:254, height:636}, {cont:{bars:true, foot}}, s2);
+  drawRouteMap(md, r, an, from, to);
+
+  /* Hoja 3: tablas */
+  const W = 495;
+  const dRows = an.stat.map(s => `<tr><td>${dm(s.d)}</td><td class="r">${Math.round(s.km)}</td><td class="r">${dec1(s.mov+s.idle)}</td><td class="r">${dec1(s.mov)}</td><td class="r">${dec1(s.idle)}</td><td class="r">${Math.round(s.vmax)}</td><td>${esc(s.places.join(" > "))}</td></tr>`);
+  dRows.push(`<tr><td>Total</td><td class="r">${Math.round(T.km)}</td><td class="r">${dec1(T.motor)}</td><td class="r">${dec1(T.mov)}</td><td class="r">${dec1(T.idle)}</td><td class="r">${Math.round(T.vmax)}</td><td></td></tr>`);
+  const detRows = an.det.map(s => `<tr><td>${dmhm(s.start)}</td><td>${dmhm(s.end)}</td><td class="r">${dec1((s.end-s.start)/H)}</td><td>${esc(s.loc)}</td></tr>`);
+  const vRows = an.vt.filter(t => t.km > 20).map(t => `<tr><td>${dmhm(t.start)}</td><td>${dmhm(t.end)}</td><td>${esc(t.from)}</td><td>${esc(t.to)}</td><td class="r">${Math.round(t.km)}</td><td class="r">${Math.round(t.vmax)}</td></tr>`);
+  const blocks = [
+    {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Detalle diario</h2>`},
+    {table:true, keepWith:true, width:W, cols:[34.4,31.2,40,36,42.4,41.6,269.4], after:12,
+      head:`<tr><th>Día</th><th class="r">Km</th><th class="r">Motor h</th><th class="r">Mov. h</th><th class="r">Ralentí h</th><th class="r">Vel.<br>máx.</th><th>Dónde estuvo (detenciones de 30 min o más)</th></tr>`, rows:dRows},
+    {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Dónde estuvo detenido (1 hora o más)</h2>`},
+    {table:true, keepWith:true, width:491, cols:[68,65.6,42.4,315], before:0, after:12, cls:"det",
+      head:`<tr><th>Desde</th><th>Hasta</th><th class="r">Horas</th><th>Lugar</th></tr>`, rows: detRows.length ? detRows : [`<tr><td colspan="4">Sin detenciones de 1 hora o más.</td></tr>`]},
+    {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Viajes de más de 20 km</h2>`},
+    {table:true, keepWith:true, width:W, cols:[62.4,62.4,147.2,146.4,34.4,42.2],
+      head:`<tr><th>Sale</th><th>Llega</th><th>Desde</th><th>Hasta</th><th class="r">Km</th><th class="r">Vel.<br>máx.</th></tr>`, rows: vRows.length ? vRows : [`<tr><td colspan="6">Sin viajes de más de 20 km.</td></tr>`]}
+  ];
+  flow(blocks, {left:58.5, top:106, width:500, height:636}, {left:58.5, top:104, width:500, height:638}, {first:{bars:true, logo:true, foot}, cont:{foot}});
+  // contenteditable en tablas generadas
+  $("report").querySelectorAll(".sheet table.t:not([contenteditable])").forEach(t => { t.setAttribute("contenteditable","true"); t.setAttribute("spellcheck","false"); });
+}
+
+// línea de fuente: se arma sola según el origen real de los datos (no editable)
+function sourceHTML(r, an){
+  const cfg = S.cfg, vt = an.vt.length ? an.vt : r.trips;
+  const g = vt.filter(t => t.gps), files = [...new Set(g.map(t => t.file).filter(Boolean))];
+  const fileTxt = files.length ? ` (archivo ${files.join(", ")})` : "";
+  const idleManual = r.pts.some(p => p.idle > 0);
+  const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : (g.length ? " La exportación GPS no incluye horas de ralentí." : "");
+  let txt, logo = false;
+  if(cfg.gpsShow !== false && g.length && g.length === vt.length){
+    txt = `Fuente de información: GPS Chile, informe de viajes exportado desde la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas según GPS Chile; el trazado del mapa es aproximado entre las posiciones registradas.${idleTxt}`;
+    logo = true;
+  } else if(cfg.gpsShow !== false && g.length){
+    txt = `Fuente de información: ${g.length} de ${vt.length} viajes según GPS Chile${fileTxt}. Los demás viajes se ingresaron o modificaron manualmente y sus distancias, horarios y velocidades son estimados.${idleTxt}`;
+  } else if(g.length){
+    txt = `Fuente de información: ${g.length === vt.length ? "" : g.length + " de " + vt.length + " viajes según "}exportación de plataforma GPS${fileTxt}${g.length === vt.length ? "" : "; los demás son estimados"}.${idleTxt}`;
+  } else {
+    txt = `Fuente de información: itinerario ingresado manualmente; distancias, horarios y velocidades estimados con rutas de OpenStreetMap.${idleTxt}`;
+  }
+  return `<div class="src">${logo ? `<img src="${gpsLogoSrc()}" alt="GPS Chile">` : ""}<span>${esc(txt)}</span></div>`;
+}
+function chartSVG(stat){
+  const W = 448, Hh = 175, left = 34, top = 6, plotH = 120, base = top + plotH;
+  const maxV = Math.max(1, ...stat.map(s => Math.round(s.km)));
+  const steps = [10,20,25,50,100,200,250,500,1000]; let step = steps.find(s => maxV/s <= 3.5) || 1000; const ymax = Math.ceil(maxV/step)*step;
+  const n = stat.length, plotW = W - left - 8, slot = plotW / n, bw = Math.min(30, slot*0.6);
+  const y = v => base - v/ymax*plotH;
+  let g = `<svg width="${W}pt" height="${Hh}pt" viewBox="0 0 ${W} ${Hh}" style="display:block;margin:16pt 0 2pt 27pt" font-family="Calibri Light, Calibri, Carlito, Arial, sans-serif">`;
+  g += `<line x1="${left}" y1="${top}" x2="${left}" y2="${base}" stroke="#bfbfbf" stroke-width="0.75"/><line x1="${left}" y1="${base}" x2="${left+plotW}" y2="${base}" stroke="#bfbfbf" stroke-width="0.75"/>`;
+  for(let v = 0; v <= ymax; v += step){ g += `<line x1="${left-3}" y1="${y(v)}" x2="${left}" y2="${y(v)}" stroke="#bfbfbf" stroke-width="0.75"/><text x="${left-6}" y="${y(v)+2.5}" font-size="7.5" fill="#404040" text-anchor="end">${v}</text>`; }
+  g += `<text transform="translate(${left-24},${top+plotH/2}) rotate(-90)" font-size="7.5" fill="#404040" text-anchor="middle">km</text>`;
+  stat.forEach((s, i) => {
+    const cx = left + slot*(i+0.5), v = Math.round(s.km);
+    if(v > 0) g += `<rect x="${cx-bw/2}" y="${y(v)}" width="${bw}" height="${base-y(v)}" fill="#096fa6"/>`;
+    g += `<line x1="${cx}" y1="${base}" x2="${cx}" y2="${base+3}" stroke="#bfbfbf" stroke-width="0.75"/>`;
+    g += `<text x="${cx}" y="${base+13}" font-size="7.5" fill="#404040" text-anchor="middle">${dm(s.d)}</text><text x="${cx}" y="${base+23}" font-size="7.5" fill="#404040" text-anchor="middle">${v} km</text>`;
+  });
+  return g + `</svg>`;
+}
+
+/* ---------- Mapa base incluido (Natural Earth): se ve aunque no carguen los mosaicos de internet ---------- */
+const BASE_COUNTRIES = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[-69.511,-17.507],[-69.637,-17.627],[-69.684,-17.655],[-69.727,-17.664],[-69.817,-17.659],[-69.85,-17.692],[-69.857,-17.735],[-69.828,-17.804],[-69.814,-17.888],[-69.781,-17.944],[-69.781,-17.981],[-69.842,-18.113],[-69.864,-18.145],[-69.922,-18.197],[-69.986,-18.265],[-70.062,-18.28],[-70.134,-18.319],[-70.21,-18.331],[-70.318,-18.321],[-70.393,-18.337],[-70.35,-18.383],[-70.303,-18.445],[-70.329,-18.472],[-70.321,-18.503],[-70.336,-18.547],[-70.336,-18.618],[-70.35,-18.636],[-70.336,-18.675],[-70.343,-18.736],[-70.357,-18.773],[-70.347,-18.839],[-70.329,-18.879],[-70.321,-18.944],[-70.311,-18.972],[-70.314,-19.021],[-70.278,-19.109],[-70.282,-19.16],[-70.267,-19.178],[-70.282,-19.224],[-70.289,-19.291],[-70.242,-19.372],[-70.213,-19.46],[-70.199,-19.535],[-70.213,-19.597],[-70.185,-19.629],[-70.149,-19.737],[-70.159,-19.818],[-70.138,-19.849],[-70.145,-19.891],[-70.123,-20.001],[-70.138,-20.041],[-70.123,-20.072],[-70.152,-20.137],[-70.149,-20.19],[-70.167,-20.208],[-70.131,-20.267],[-70.145,-20.33],[-70.188,-20.354],[-70.167,-20.448],[-70.177,-20.492],[-70.206,-20.527],[-70.195,-20.678],[-70.206,-20.739],[-70.192,-20.793],[-70.195,-20.816],[-70.141,-20.88],[-70.141,-20.916],[-70.127,-20.936],[-70.163,-20.987],[-70.163,-21.041],[-70.127,-21.09],[-70.131,-21.124],[-70.095,-21.189],[-70.08,-21.233],[-70.069,-21.306],[-70.095,-21.345],[-70.084,-21.392],[-70.059,-21.433],[-70.084,-21.483],[-70.073,-21.537],[-70.087,-21.546],[-70.095,-21.591],[-70.141,-21.632],[-70.152,-21.666],[-70.152,-21.76],[-70.145,-21.812],[-70.149,-21.861],[-70.192,-21.885],[-70.17,-21.932],[-70.177,-21.973],[-70.199,-22.005],[-70.185,-22.042],[-70.224,-22.147],[-70.235,-22.299],[-70.249,-22.328],[-70.246,-22.385],[-70.253,-22.456],[-70.242,-22.496],[-70.282,-22.566],[-70.267,-22.608],[-70.289,-22.631],[-70.282,-22.696],[-70.314,-22.79],[-70.293,-22.846],[-70.296,-22.919],[-70.321,-22.946],[-70.336,-23.003],[-70.372,-23.05],[-70.426,-23.089],[-70.469,-23.096],[-70.501,-23.055],[-70.505,-23.01],[-70.563,-23.06],[-70.581,-23.108],[-70.566,-23.2],[-70.588,-23.214],[-70.602,-23.282],[-70.591,-23.325],[-70.606,-23.358],[-70.599,-23.405],[-70.584,-23.423],[-70.613,-23.447],[-70.631,-23.516],[-70.606,-23.511],[-70.541,-23.531],[-70.498,-23.469],[-70.411,-23.511],[-70.39,-23.577],[-70.404,-23.651],[-70.451,-23.729],[-70.483,-23.754],[-70.498,-23.785],[-70.494,-23.837],[-70.512,-23.859],[-70.501,-23.913],[-70.527,-23.996],[-70.509,-24.038],[-70.501,-24.097],[-70.516,-24.146],[-70.505,-24.168],[-70.512,-24.214],[-70.53,-24.244],[-70.534,-24.307],[-70.555,-24.366],[-70.541,-24.415],[-70.584,-24.538],[-70.566,-24.561],[-70.555,-24.605],[-70.577,-24.653],[-70.577,-24.732],[-70.555,-24.766],[-70.555,-24.811],[-70.519,-24.919],[-70.473,-24.975],[-70.469,-25.001],[-70.501,-25.085],[-70.447,-25.152],[-70.433,-25.237],[-70.455,-25.318],[-70.444,-25.345],[-70.476,-25.386],[-70.512,-25.386],[-70.53,-25.456],[-70.602,-25.502],[-70.624,-25.504],[-70.653,-25.541],[-70.635,-25.625],[-70.674,-25.654],[-70.692,-25.691],[-70.699,-25.774],[-70.725,-25.779],[-70.739,-25.83],[-70.71,-25.835],[-70.696,-25.885],[-70.649,-25.944],[-70.635,-25.975],[-70.638,-26.044],[-70.66,-26.064],[-70.671,-26.161],[-70.649,-26.237],[-70.681,-26.304],[-70.642,-26.316],[-70.631,-26.341],[-70.656,-26.356],[-70.667,-26.385],[-70.699,-26.4],[-70.685,-26.456],[-70.707,-26.493],[-70.692,-26.544],[-70.732,-26.682],[-70.757,-26.714],[-70.732,-26.75],[-70.786,-26.789],[-70.825,-26.873],[-70.789,-26.978],[-70.793,-27.003],[-70.847,-27.045],[-70.869,-27.11],[-70.908,-27.13],[-70.948,-27.123],[-70.962,-27.182],[-70.944,-27.214],[-70.955,-27.243],[-70.933,-27.299],[-70.944,-27.371],[-70.905,-27.442],[-70.89,-27.493],[-70.919,-27.544],[-70.912,-27.621],[-70.969,-27.66],[-71.041,-27.679],[-71.049,-27.723],[-71.077,-27.78],[-71.088,-27.831],[-71.106,-27.839],[-71.099,-27.874],[-71.121,-27.895],[-71.139,-27.945],[-71.146,-28.048],[-71.175,-28.092],[-71.157,-28.143],[-71.16,-28.212],[-71.171,-28.268],[-71.193,-28.295],[-71.171,-28.327],[-71.189,-28.405],[-71.232,-28.471],[-71.268,-28.486],[-71.261,-28.521],[-71.315,-28.574],[-71.286,-28.619],[-71.301,-28.675],[-71.358,-28.724],[-71.391,-28.8],[-71.488,-28.845],[-71.513,-28.889],[-71.524,-28.94],[-71.488,-29.036],[-71.502,-29.07],[-71.481,-29.094],[-71.495,-29.127],[-71.495,-29.193],[-71.47,-29.229],[-71.376,-29.283],[-71.347,-29.317],[-71.337,-29.381],[-71.308,-29.409],[-71.319,-29.472],[-71.333,-29.504],[-71.333,-29.544],[-71.311,-29.587],[-71.29,-29.604],[-71.322,-29.656],[-71.319,-29.696],[-71.337,-29.712],[-71.326,-29.788],[-71.283,-29.85],[-71.286,-29.911],[-71.319,-29.943],[-71.351,-29.931],[-71.383,-29.977],[-71.412,-29.992],[-71.394,-30.017],[-71.376,-30.078],[-71.387,-30.162],[-71.416,-30.188],[-71.445,-30.162],[-71.502,-30.252],[-71.506,-30.272],[-71.542,-30.286],[-71.589,-30.286],[-71.639,-30.252],[-71.679,-30.343],[-71.686,-30.45],[-71.704,-30.509],[-71.697,-30.544],[-71.715,-30.615],[-71.7,-30.71],[-71.707,-30.779],[-71.689,-30.843],[-71.679,-30.919],[-71.653,-30.976],[-71.65,-31.022],[-71.668,-31.171],[-71.646,-31.203],[-71.61,-31.42],[-71.592,-31.444],[-71.571,-31.518],[-71.571,-31.591],[-71.513,-31.79],[-71.538,-31.838],[-71.506,-31.87],[-71.527,-31.941],[-71.509,-31.978],[-71.527,-32.084],[-71.527,-32.126],[-71.545,-32.194],[-71.531,-32.226],[-71.481,-32.266],[-71.466,-32.332],[-71.412,-32.369],[-71.441,-32.484],[-71.477,-32.535],[-71.448,-32.597],[-71.445,-32.643],[-71.466,-32.699],[-71.506,-32.711],[-71.502,-32.766],[-71.542,-32.773],[-71.549,-32.795],[-71.517,-32.873],[-71.527,-32.908],[-71.556,-32.932],[-71.553,-32.964],[-71.567,-33.003],[-71.592,-33.02],[-71.646,-33.02],[-71.668,-33.036],[-71.689,-33.085],[-71.743,-33.087],[-71.761,-33.102],[-71.725,-33.155],[-71.707,-33.246],[-71.675,-33.302],[-71.671,-33.359],[-71.707,-33.389],[-71.707,-33.435],[-71.643,-33.501],[-71.625,-33.541],[-71.646,-33.568],[-71.646,-33.634],[-71.671,-33.698],[-71.743,-33.757],[-71.808,-33.778],[-71.837,-33.827],[-71.859,-33.911],[-71.902,-33.965],[-71.905,-34.009],[-71.945,-34.039],[-71.959,-34.075],[-72.017,-34.141],[-72.028,-34.163],[-71.995,-34.212],[-71.988,-34.254],[-71.988,-34.355],[-71.995,-34.37],[-72.049,-34.404],[-72.057,-34.428],[-72.042,-34.485],[-72.053,-34.57],[-72.057,-34.659],[-72.103,-34.76],[-72.132,-34.784],[-72.147,-34.83],[-72.175,-34.867],[-72.193,-34.909],[-72.204,-35.041],[-72.229,-35.117],[-72.287,-35.169],[-72.399,-35.233],[-72.42,-35.269],[-72.431,-35.335],[-72.489,-35.377],[-72.489,-35.419],[-72.528,-35.49],[-72.633,-35.552],[-72.654,-35.586],[-72.651,-35.608],[-72.6,-35.691],[-72.582,-35.77],[-72.597,-35.811],[-72.665,-35.846],[-72.687,-35.883],[-72.78,-35.953],[-72.805,-35.988],[-72.791,-36.008],[-72.798,-36.051],[-72.82,-36.081],[-72.809,-36.142],[-72.838,-36.179],[-72.823,-36.265],[-72.841,-36.327],[-72.874,-36.378],[-72.877,-36.414],[-72.906,-36.456],[-72.931,-36.523],[-72.989,-36.528],[-72.989,-36.572],[-72.96,-36.621],[-72.982,-36.655],[-72.982,-36.691],[-73.003,-36.714],[-73.072,-36.714],[-73.09,-36.687],[-73.093,-36.618],[-73.119,-36.598],[-73.133,-36.65],[-73.129,-36.677],[-73.158,-36.734],[-73.209,-36.775],[-73.165,-36.794],[-73.144,-36.834],[-73.158,-36.961],[-73.176,-36.984],[-73.173,-37.076],[-73.209,-37.16],[-73.237,-37.192],[-73.32,-37.224],[-73.403,-37.236],[-73.468,-37.234],[-73.468,-37.207],[-73.504,-37.207],[-73.558,-37.184],[-73.579,-37.158],[-73.608,-37.155],[-73.644,-37.202],[-73.648,-37.268],[-73.677,-37.325],[-73.673,-37.363],[-73.612,-37.413],[-73.597,-37.493],[-73.605,-37.513],[-73.655,-37.55],[-73.677,-37.579],[-73.687,-37.621],[-73.666,-37.663],[-73.669,-37.719],[-73.623,-37.759],[-73.558,-37.846],[-73.504,-37.933],[-73.477,-38],[-71.052,-38],[-71.088,-37.94],[-71.095,-37.898],[-71.135,-37.839],[-71.185,-37.705],[-71.193,-37.661],[-71.185,-37.626],[-71.131,-37.591],[-71.142,-37.543],[-71.117,-37.467],[-71.135,-37.425],[-71.167,-37.391],[-71.196,-37.344],[-71.207,-37.293],[-71.146,-37.214],[-71.149,-37.155],[-71.124,-37.119],[-71.088,-37.104],[-71.139,-37.062],[-71.149,-37.013],[-71.189,-36.986],[-71.142,-36.966],[-71.139,-36.937],[-71.167,-36.922],[-71.164,-36.873],[-71.193,-36.858],[-71.146,-36.741],[-71.149,-36.704],[-71.131,-36.677],[-71.074,-36.697],[-71.056,-36.687],[-71.07,-36.604],[-71.063,-36.52],[-71.045,-36.485],[-70.969,-36.486],[-70.933,-36.473],[-70.915,-36.419],[-70.89,-36.4],[-70.807,-36.434],[-70.717,-36.415],[-70.714,-36.368],[-70.732,-36.334],[-70.703,-36.26],[-70.674,-36.253],[-70.602,-36.187],[-70.57,-36.138],[-70.498,-36.164],[-70.451,-36.152],[-70.429,-36.13],[-70.411,-36.084],[-70.386,-36.059],[-70.383,-36.03],[-70.411,-35.97],[-70.39,-35.905],[-70.422,-35.904],[-70.419,-35.868],[-70.357,-35.816],[-70.375,-35.762],[-70.422,-35.661],[-70.411,-35.608],[-70.419,-35.547],[-70.408,-35.507],[-70.444,-35.461],[-70.473,-35.38],[-70.429,-35.357],[-70.44,-35.333],[-70.476,-35.314],[-70.559,-35.299],[-70.581,-35.26],[-70.545,-35.21],[-70.386,-35.167],[-70.368,-35.097],[-70.372,-35.024],[-70.354,-34.953],[-70.278,-34.798],[-70.318,-34.745],[-70.275,-34.727],[-70.253,-34.696],[-70.242,-34.619],[-70.228,-34.585],[-70.167,-34.538],[-70.113,-34.448],[-70.059,-34.396],[-70.066,-34.313],[-70.041,-34.278],[-69.99,-34.269],[-69.911,-34.284],[-69.904,-34.269],[-69.832,-34.244],[-69.828,-34.234],[-69.875,-34.141],[-69.864,-34.107],[-69.857,-34.031],[-69.864,-33.958],[-69.911,-33.955],[-69.896,-33.871],[-69.914,-33.793],[-69.907,-33.761],[-69.86,-33.727],[-69.896,-33.663],[-69.871,-33.585],[-69.875,-33.548],[-69.842,-33.533],[-69.832,-33.459],[-69.796,-33.415],[-69.788,-33.379],[-69.806,-33.344],[-69.814,-33.29],[-69.835,-33.266],[-69.904,-33.237],[-69.94,-33.242],[-69.983,-33.295],[-70.012,-33.3],[-70.041,-33.239],[-70.087,-33.202],[-70.109,-33.17],[-70.091,-33.092],[-70.113,-33.038],[-70.087,-33.008],[-70.055,-33.001],[-70.033,-32.977],[-70.001,-32.876],[-70.055,-32.851],[-70.141,-32.768],[-70.156,-32.738],[-70.181,-32.63],[-70.177,-32.581],[-70.138,-32.569],[-70.159,-32.542],[-70.159,-32.486],[-70.188,-32.454],[-70.228,-32.435],[-70.246,-32.403],[-70.242,-32.331],[-70.271,-32.299],[-70.311,-32.288],[-70.329,-32.256],[-70.329,-32.219],[-70.347,-32.175],[-70.336,-32.15],[-70.357,-32.123],[-70.361,-32.086],[-70.386,-32.062],[-70.372,-32.03],[-70.311,-32.047],[-70.275,-32.039],[-70.267,-32.001],[-70.242,-31.961],[-70.275,-31.907],[-70.314,-31.881],[-70.393,-31.878],[-70.429,-31.87],[-70.476,-31.821],[-70.487,-31.731],[-70.527,-31.684],[-70.581,-31.593],[-70.591,-31.549],[-70.581,-31.505],[-70.577,-31.414],[-70.555,-31.363],[-70.57,-31.304],[-70.548,-31.265],[-70.537,-31.172],[-70.48,-31.096],[-70.447,-31.098],[-70.437,-31.142],[-70.408,-31.15],[-70.383,-31.122],[-70.361,-31.073],[-70.321,-31.034],[-70.278,-31.039],[-70.267,-31.024],[-70.336,-30.956],[-70.339,-30.938],[-70.318,-30.801],[-70.275,-30.725],[-70.271,-30.657],[-70.235,-30.591],[-70.217,-30.515],[-70.195,-30.487],[-70.163,-30.47],[-70.145,-30.439],[-70.174,-30.382],[-70.149,-30.353],[-70.066,-30.389],[-70.03,-30.397],[-69.965,-30.375],[-69.911,-30.33],[-69.893,-30.238],[-69.85,-30.2],[-69.835,-30.162],[-69.85,-30.127],[-69.882,-30.1],[-69.918,-30.088],[-69.972,-30.09],[-69.976,-30.058],[-69.94,-30.012],[-69.922,-29.94],[-69.914,-29.806],[-69.929,-29.718],[-69.972,-29.666],[-69.968,-29.583],[-69.99,-29.489],[-70.012,-29.457],[-70.019,-29.404],[-70.044,-29.364],[-70.041,-29.298],[-70.03,-29.278],[-69.979,-29.251],[-69.99,-29.215],[-69.922,-29.168],[-69.911,-29.143],[-69.821,-29.121],[-69.803,-29.099],[-69.796,-29.05],[-69.806,-28.98],[-69.796,-28.921],[-69.767,-28.884],[-69.763,-28.859],[-69.734,-28.812],[-69.756,-28.707],[-69.742,-28.641],[-69.702,-28.584],[-69.673,-28.563],[-69.673,-28.457],[-69.655,-28.401],[-69.608,-28.356],[-69.554,-28.319],[-69.5,-28.251],[-69.49,-28.199],[-69.475,-28.189],[-69.436,-28.209],[-69.41,-28.202],[-69.367,-28.131],[-69.313,-28.015],[-69.292,-27.989],[-69.216,-27.969],[-69.173,-27.923],[-69.119,-27.723],[-69.076,-27.695],[-69.094,-27.64],[-69.061,-27.609],[-69.029,-27.552],[-69.014,-27.5],[-69.011,-27.449],[-68.957,-27.42],[-68.932,-27.395],[-68.881,-27.295],[-68.881,-27.221],[-68.827,-27.137],[-68.802,-27.113],[-68.719,-27.106],[-68.651,-27.152],[-68.586,-27.164],[-68.557,-27.108],[-68.518,-27.077],[-68.442,-27.067],[-68.377,-27.044],[-68.33,-27.045],[-68.33,-27],[-68.302,-26.927],[-68.32,-26.87],[-68.572,-26.551],[-68.597,-26.458],[-68.593,-26.378],[-68.575,-26.304],[-68.546,-26.269],[-68.42,-26.179],[-68.41,-26.144],[-68.417,-26.093],[-68.485,-25.836],[-68.507,-25.728],[-68.561,-25.662],[-68.554,-25.573],[-68.604,-25.51],[-68.608,-25.436],[-68.554,-25.291],[-68.518,-25.183],[-68.474,-25.146],[-68.42,-25.149],[-68.381,-25.137],[-68.366,-25.104],[-68.42,-25.051],[-68.442,-25.021],[-68.438,-24.967],[-68.471,-24.931],[-68.478,-24.899],[-68.543,-24.877],[-68.579,-24.808],[-68.572,-24.769],[-68.521,-24.675],[-68.503,-24.612],[-68.482,-24.599],[-68.453,-24.629],[-68.438,-24.58],[-68.399,-24.501],[-68.381,-24.491],[-68.327,-24.499],[-68.244,-24.386],[-67.884,-24.244],[-67.51,-24.09],[-67.412,-24.055],[-67.362,-24.03],[-67.34,-24.001],[-67.286,-23.834],[-67.247,-23.722],[-67.178,-23.51],[-67.106,-23.298],[-67.02,-23.032],[-67.013,-23.001],[-67.193,-22.822],[-67.546,-22.893],[-67.618,-22.897],[-67.772,-22.888],[-67.805,-22.878],[-67.834,-22.841],[-67.877,-22.834],[-67.891,-22.794],[-67.891,-22.716],[-67.859,-22.567],[-67.859,-22.547],[-67.891,-22.491],[-67.906,-22.42],[-67.945,-22.355],[-67.952,-22.314],[-67.934,-22.252],[-67.945,-22.208],[-67.974,-22.17],[-67.956,-22.125],[-67.988,-22.057],[-68.01,-22.046],[-68.093,-21.968],[-68.107,-21.789],[-68.129,-21.713],[-68.19,-21.606],[-68.197,-21.571],[-68.194,-21.328],[-68.208,-21.284],[-68.417,-20.96],[-68.453,-20.939],[-68.51,-20.939],[-68.554,-20.914],[-68.572,-20.872],[-68.572,-20.744],[-68.55,-20.7],[-68.482,-20.642],[-68.51,-20.602],[-68.582,-20.563],[-68.687,-20.517],[-68.73,-20.479],[-68.766,-20.421],[-68.759,-20.364],[-68.68,-20.328],[-68.719,-20.262],[-68.73,-20.229],[-68.723,-20.161],[-68.788,-20.126],[-68.777,-20.09],[-68.654,-20.055],[-68.59,-20.056],[-68.579,-20.046],[-68.564,-19.982],[-68.543,-19.935],[-68.561,-19.844],[-68.618,-19.813],[-68.698,-19.746],[-68.705,-19.715],[-68.69,-19.695],[-68.629,-19.643],[-68.532,-19.501],[-68.496,-19.459],[-68.449,-19.435],[-68.492,-19.378],[-68.6,-19.303],[-68.662,-19.273],[-68.698,-19.215],[-68.816,-19.114],[-68.849,-19.092],[-68.896,-19.077],[-68.921,-19.053],[-68.96,-18.969],[-68.989,-18.947],[-68.96,-18.908],[-68.95,-18.868],[-69.011,-18.746],[-69,-18.716],[-69.032,-18.65],[-69.043,-18.601],[-69.036,-18.501],[-69.043,-18.457],[-69.079,-18.398],[-69.079,-18.319],[-69.097,-18.277],[-69.101,-18.234],[-69.14,-18.187],[-69.155,-18.14],[-69.09,-18.082],[-69.083,-18.039],[-69.158,-18.025],[-69.234,-17.993],[-69.263,-17.964],[-69.302,-17.976],[-69.328,-17.915],[-69.328,-17.841],[-69.335,-17.805],[-69.36,-17.76],[-69.396,-17.721],[-69.475,-17.652],[-69.497,-17.621],[-69.508,-17.584],[-69.511,-17.507]]],[[[-78.789,-33.609],[-78.886,-33.575],[-78.9,-33.602],[-78.943,-33.616],[-78.958,-33.656],[-78.886,-33.633],[-78.843,-33.636],[-78.814,-33.651],[-78.756,-33.643],[-78.789,-33.609]]],[[[-73.54,-36.989],[-73.551,-37.028],[-73.529,-37.069],[-73.486,-37.025],[-73.54,-36.989]]]]},"properties":{"n":"Chile"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-69.511,-17.507],[-69.508,-17.584],[-69.497,-17.621],[-69.475,-17.652],[-69.396,-17.721],[-69.36,-17.76],[-69.335,-17.805],[-69.328,-17.841],[-69.328,-17.915],[-69.302,-17.976],[-69.263,-17.964],[-69.234,-17.993],[-69.158,-18.025],[-69.083,-18.039],[-69.09,-18.082],[-69.155,-18.14],[-69.14,-18.187],[-69.101,-18.234],[-69.097,-18.277],[-69.079,-18.319],[-69.079,-18.398],[-69.043,-18.457],[-69.036,-18.501],[-69.043,-18.601],[-69.032,-18.65],[-69,-18.716],[-69.011,-18.746],[-68.95,-18.868],[-68.96,-18.908],[-68.989,-18.947],[-68.96,-18.969],[-68.921,-19.053],[-68.896,-19.077],[-68.849,-19.092],[-68.816,-19.114],[-68.698,-19.215],[-68.662,-19.273],[-68.6,-19.303],[-68.492,-19.378],[-68.449,-19.435],[-68.496,-19.459],[-68.532,-19.501],[-68.629,-19.643],[-68.69,-19.695],[-68.705,-19.715],[-68.698,-19.746],[-68.618,-19.813],[-68.561,-19.844],[-68.543,-19.935],[-68.564,-19.982],[-68.579,-20.046],[-68.59,-20.056],[-68.654,-20.055],[-68.777,-20.09],[-68.788,-20.126],[-68.723,-20.161],[-68.73,-20.229],[-68.719,-20.262],[-68.68,-20.328],[-68.759,-20.364],[-68.766,-20.421],[-68.73,-20.479],[-68.687,-20.517],[-68.582,-20.563],[-68.51,-20.602],[-68.482,-20.642],[-68.55,-20.7],[-68.572,-20.744],[-68.572,-20.872],[-68.554,-20.914],[-68.51,-20.939],[-68.453,-20.939],[-68.417,-20.96],[-68.208,-21.284],[-68.194,-21.328],[-68.197,-21.571],[-68.19,-21.606],[-68.129,-21.713],[-68.107,-21.789],[-68.093,-21.968],[-68.01,-22.046],[-67.988,-22.057],[-67.956,-22.125],[-67.974,-22.17],[-67.945,-22.208],[-67.934,-22.252],[-67.952,-22.314],[-67.945,-22.355],[-67.906,-22.42],[-67.891,-22.491],[-67.859,-22.547],[-67.859,-22.567],[-67.891,-22.716],[-67.891,-22.794],[-67.877,-22.834],[-67.834,-22.841],[-67.805,-22.878],[-67.772,-22.888],[-67.618,-22.897],[-67.546,-22.893],[-67.193,-22.822],[-67.142,-22.743],[-67.114,-22.711],[-67.038,-22.655],[-67.024,-22.618],[-67.034,-22.525],[-66.977,-22.522],[-66.908,-22.468],[-66.797,-22.436],[-66.79,-22.38],[-66.768,-22.343],[-66.757,-22.268],[-66.736,-22.224],[-66.7,-22.201],[-66.642,-22.213],[-66.628,-22.192],[-66.509,-22.164],[-66.379,-22.127],[-66.336,-22.083],[-66.307,-22.078],[-66.296,-22.051],[-66.289,-21.958],[-66.239,-21.792],[-66.221,-21.787],[-66.138,-21.812],[-66.095,-21.833],[-66.062,-21.865],[-66.048,-21.917],[-65.954,-21.932],[-65.933,-21.944],[-65.803,-22.086],[-65.746,-22.115],[-65.605,-22.1],[-65.58,-22.086],[-65.458,-22.101],[-65.022,-22.096],[-64.831,-22.137],[-64.763,-22.174],[-64.723,-22.184],[-64.687,-22.172],[-64.586,-22.213],[-64.55,-22.255],[-64.543,-22.292],[-64.572,-22.343],[-64.525,-22.385],[-64.532,-22.425],[-64.507,-22.444],[-64.482,-22.491],[-64.428,-22.542],[-64.457,-22.616],[-64.453,-22.643],[-64.428,-22.658],[-64.403,-22.712],[-64.356,-22.751],[-64.36,-22.804],[-64.327,-22.859],[-64.295,-22.763],[-64.295,-22.691],[-64.252,-22.54],[-64.237,-22.517],[-64.183,-22.471],[-64.162,-22.439],[-64.086,-22.258],[-64.05,-22.23],[-63.996,-22.083],[-63.964,-22.059],[-63.949,-22.008],[-63.906,-21.997],[-63.812,-22.003],[-63.74,-22.051],[-63.679,-22.003],[-63.64,-21.998],[-63.326,-22],[-63.01,-22.002],[-62.862,-21.993],[-62.804,-22.003],[-62.794,-22.051],[-62.79,-22.113],[-62.768,-22.145],[-62.678,-22.194],[-62.65,-22.235],[-62.628,-22.184],[-62.574,-22.002],[-62.531,-21.865],[-62.491,-21.752],[-62.412,-21.5],[-62.275,-21.066],[-62.272,-21],[-62.275,-20.855],[-62.275,-20.671],[-62.279,-20.58],[-62.268,-20.553],[-62.146,-20.382],[-62.099,-20.321],[-61.944,-20.104],[-61.894,-20.001],[-61.76,-19.658],[-61.739,-19.639],[-61.512,-19.607],[-61.174,-19.538],[-60.835,-19.469],[-60.497,-19.398],[-60.158,-19.329],[-60,-19.298],[-60,-16.963],[-60,-16.904],[-60,-16.541],[-60,-16.524],[-60,-16.278],[-60.13,-16.272],[-60.162,-16.266],[-60.18,-16.222],[-60.183,-16.169],[-60.184,-16.163],[-60.205,-15.853],[-60.238,-15.502],[-60.259,-15.457],[-60.353,-15.35],[-60.529,-15.144],[-60.583,-15.099],[-60.274,-15.095],[-60.274,-15.019],[-60.292,-14.629],[-60.302,-14.607],[-60.353,-14.575],[-60.371,-14.543],[-60.338,-14.533],[-60.346,-14.491],[-60.378,-14.42],[-60.4,-14.341],[-60.454,-14.297],[-60.464,-14.278],[-60.461,-14.199],[-60.475,-14.177],[-60.475,-14.118],[-60.436,-14.092],[-60.41,-14.055],[-60.393,-14],[-68.957,-14],[-68.917,-14.025],[-68.899,-14.055],[-68.863,-14.192],[-68.885,-14.212],[-68.986,-14.229],[-69.011,-14.246],[-69.014,-14.322],[-68.989,-14.379],[-69.011,-14.398],[-69.076,-14.432],[-69.133,-14.491],[-69.166,-14.503],[-69.169,-14.577],[-69.234,-14.574],[-69.248,-14.594],[-69.252,-14.722],[-69.266,-14.751],[-69.338,-14.774],[-69.371,-14.802],[-69.367,-14.901],[-69.385,-14.945],[-69.385,-14.982],[-69.346,-15.016],[-69.274,-15.119],[-69.212,-15.161],[-69.148,-15.234],[-69.166,-15.264],[-69.209,-15.264],[-69.223,-15.301],[-69.256,-15.313],[-69.292,-15.35],[-69.284,-15.406],[-69.331,-15.425],[-69.349,-15.462],[-69.356,-15.502],[-69.421,-15.597],[-69.425,-15.656],[-69.371,-15.789],[-69.241,-16.098],[-69.211,-16.163],[-69.205,-16.169],[-69.144,-16.223],[-69.094,-16.232],[-69.065,-16.211],[-69.011,-16.22],[-68.982,-16.21],[-68.917,-16.267],[-68.845,-16.303],[-68.834,-16.33],[-68.856,-16.363],[-68.968,-16.406],[-69,-16.423],[-69.029,-16.455],[-69.038,-16.525],[-69.037,-16.541],[-69.036,-16.598],[-69.007,-16.634],[-69.036,-16.671],[-69.112,-16.711],[-69.184,-16.728],[-69.209,-16.797],[-69.223,-16.818],[-69.314,-16.908],[-69.346,-16.963],[-69.364,-16.992],[-69.407,-17.015],[-69.4,-17.047],[-69.428,-17.086],[-69.511,-17.111],[-69.594,-17.179],[-69.623,-17.186],[-69.648,-17.263],[-69.666,-17.289],[-69.598,-17.301],[-69.522,-17.37],[-69.508,-17.434],[-69.511,-17.507]]]},"properties":{"n":"Bolivia"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-69.511,-17.507],[-69.508,-17.434],[-69.522,-17.37],[-69.598,-17.301],[-69.666,-17.289],[-69.648,-17.263],[-69.623,-17.186],[-69.594,-17.179],[-69.511,-17.111],[-69.428,-17.086],[-69.4,-17.047],[-69.407,-17.015],[-69.364,-16.992],[-69.346,-16.963],[-69.314,-16.908],[-69.223,-16.818],[-69.209,-16.797],[-69.184,-16.728],[-69.112,-16.711],[-69.036,-16.671],[-69.007,-16.634],[-69.036,-16.598],[-69.037,-16.541],[-69.038,-16.525],[-69.029,-16.455],[-69,-16.423],[-68.968,-16.406],[-68.856,-16.363],[-68.834,-16.33],[-68.845,-16.303],[-68.917,-16.267],[-68.982,-16.21],[-69.011,-16.22],[-69.065,-16.211],[-69.094,-16.232],[-69.144,-16.223],[-69.205,-16.169],[-69.211,-16.163],[-69.241,-16.098],[-69.371,-15.789],[-69.425,-15.656],[-69.421,-15.597],[-69.356,-15.502],[-69.349,-15.462],[-69.331,-15.425],[-69.284,-15.406],[-69.292,-15.35],[-69.256,-15.313],[-69.223,-15.301],[-69.209,-15.264],[-69.166,-15.264],[-69.148,-15.234],[-69.212,-15.161],[-69.274,-15.119],[-69.346,-15.016],[-69.385,-14.982],[-69.385,-14.945],[-69.367,-14.901],[-69.371,-14.802],[-69.338,-14.774],[-69.266,-14.751],[-69.252,-14.722],[-69.248,-14.594],[-69.234,-14.574],[-69.169,-14.577],[-69.166,-14.503],[-69.133,-14.491],[-69.076,-14.432],[-69.011,-14.398],[-68.989,-14.379],[-69.014,-14.322],[-69.011,-14.246],[-68.986,-14.229],[-68.885,-14.212],[-68.863,-14.192],[-68.899,-14.055],[-68.917,-14.025],[-68.957,-14],[-76.281,-14],[-76.269,-14.02],[-76.29,-14.08],[-76.283,-14.141],[-76.29,-14.167],[-76.272,-14.2],[-76.251,-14.17],[-76.204,-14.168],[-76.182,-14.211],[-76.15,-14.224],[-76.107,-14.305],[-76.143,-14.329],[-76.128,-14.368],[-76.092,-14.373],[-76.038,-14.43],[-75.981,-14.46],[-75.966,-14.493],[-75.977,-14.518],[-75.934,-14.58],[-75.93,-14.65],[-75.858,-14.697],[-75.84,-14.726],[-75.747,-14.771],[-75.682,-14.822],[-75.552,-14.884],[-75.505,-14.918],[-75.505,-14.957],[-75.455,-14.997],[-75.441,-15.028],[-75.361,-15.144],[-75.289,-15.161],[-75.228,-15.224],[-75.235,-15.276],[-75.167,-15.311],[-75.156,-15.347],[-75.192,-15.362],[-75.16,-15.393],[-75.106,-15.409],[-75.066,-15.45],[-75.019,-15.457],[-74.98,-15.482],[-74.868,-15.538],[-74.847,-15.566],[-74.753,-15.605],[-74.681,-15.642],[-74.537,-15.703],[-74.461,-15.727],[-74.443,-15.798],[-74.397,-15.826],[-74.328,-15.848],[-74.289,-15.84],[-74.253,-15.855],[-74.22,-15.891],[-74.163,-15.901],[-74.047,-15.96],[-74.029,-15.989],[-74.033,-16.012],[-73.936,-16.087],[-73.842,-16.147],[-73.804,-16.163],[-73.79,-16.169],[-73.734,-16.19],[-73.702,-16.22],[-73.597,-16.24],[-73.482,-16.279],[-73.421,-16.293],[-73.317,-16.34],[-73.306,-16.382],[-73.23,-16.407],[-73.176,-16.414],[-73.093,-16.46],[-73.061,-16.495],[-72.972,-16.526],[-72.928,-16.541],[-72.888,-16.554],[-72.78,-16.629],[-72.694,-16.661],[-72.589,-16.659],[-72.528,-16.684],[-72.478,-16.694],[-72.413,-16.742],[-72.384,-16.745],[-72.305,-16.824],[-72.294,-16.88],[-72.269,-16.895],[-72.211,-16.91],[-72.179,-16.943],[-72.141,-16.963],[-72.111,-17.024],[-72.046,-17.027],[-72.003,-17.042],[-71.949,-17.074],[-71.877,-17.149],[-71.808,-17.191],[-71.635,-17.233],[-71.603,-17.26],[-71.513,-17.285],[-71.484,-17.328],[-71.445,-17.355],[-71.401,-17.4],[-71.376,-17.493],[-71.369,-17.593],[-71.358,-17.633],[-71.387,-17.687],[-71.304,-17.706],[-71.268,-17.731],[-71.218,-17.751],[-71.175,-17.797],[-71.139,-17.821],[-71.088,-17.87],[-71.067,-17.871],[-70.987,-17.9],[-70.915,-17.947],[-70.89,-18.006],[-70.825,-18.037],[-70.732,-18.116],[-70.685,-18.162],[-70.53,-18.243],[-70.393,-18.337],[-70.318,-18.321],[-70.21,-18.331],[-70.134,-18.319],[-70.062,-18.28],[-69.986,-18.265],[-69.922,-18.197],[-69.864,-18.145],[-69.842,-18.113],[-69.781,-17.981],[-69.781,-17.944],[-69.814,-17.888],[-69.828,-17.804],[-69.857,-17.735],[-69.85,-17.692],[-69.817,-17.659],[-69.727,-17.664],[-69.684,-17.655],[-69.637,-17.627],[-69.511,-17.507]]]},"properties":{"n":"Peru"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-67.193,-22.822],[-67.013,-23.001],[-67.02,-23.032],[-67.106,-23.298],[-67.178,-23.51],[-67.247,-23.722],[-67.286,-23.834],[-67.34,-24.001],[-67.362,-24.03],[-67.412,-24.055],[-67.51,-24.09],[-67.884,-24.244],[-68.244,-24.386],[-68.327,-24.499],[-68.381,-24.491],[-68.399,-24.501],[-68.438,-24.58],[-68.453,-24.629],[-68.482,-24.599],[-68.503,-24.612],[-68.521,-24.675],[-68.572,-24.769],[-68.579,-24.808],[-68.543,-24.877],[-68.478,-24.899],[-68.471,-24.931],[-68.438,-24.967],[-68.442,-25.021],[-68.42,-25.051],[-68.366,-25.104],[-68.381,-25.137],[-68.42,-25.149],[-68.474,-25.146],[-68.518,-25.183],[-68.554,-25.291],[-68.608,-25.436],[-68.604,-25.51],[-68.554,-25.573],[-68.561,-25.662],[-68.507,-25.728],[-68.485,-25.836],[-68.417,-26.093],[-68.41,-26.144],[-68.42,-26.179],[-68.546,-26.269],[-68.575,-26.304],[-68.593,-26.378],[-68.597,-26.458],[-68.572,-26.551],[-68.32,-26.87],[-68.302,-26.927],[-68.33,-27],[-68.33,-27.045],[-68.377,-27.044],[-68.442,-27.067],[-68.518,-27.077],[-68.557,-27.108],[-68.586,-27.164],[-68.651,-27.152],[-68.719,-27.106],[-68.802,-27.113],[-68.827,-27.137],[-68.881,-27.221],[-68.881,-27.295],[-68.932,-27.395],[-68.957,-27.42],[-69.011,-27.449],[-69.014,-27.5],[-69.029,-27.552],[-69.061,-27.609],[-69.094,-27.64],[-69.076,-27.695],[-69.119,-27.723],[-69.173,-27.923],[-69.216,-27.969],[-69.292,-27.989],[-69.313,-28.015],[-69.367,-28.131],[-69.41,-28.202],[-69.436,-28.209],[-69.475,-28.189],[-69.49,-28.199],[-69.5,-28.251],[-69.554,-28.319],[-69.608,-28.356],[-69.655,-28.401],[-69.673,-28.457],[-69.673,-28.563],[-69.702,-28.584],[-69.742,-28.641],[-69.756,-28.707],[-69.734,-28.812],[-69.763,-28.859],[-69.767,-28.884],[-69.796,-28.921],[-69.806,-28.98],[-69.796,-29.05],[-69.803,-29.099],[-69.821,-29.121],[-69.911,-29.143],[-69.922,-29.168],[-69.99,-29.215],[-69.979,-29.251],[-70.03,-29.278],[-70.041,-29.298],[-70.044,-29.364],[-70.019,-29.404],[-70.012,-29.457],[-69.99,-29.489],[-69.968,-29.583],[-69.972,-29.666],[-69.929,-29.718],[-69.914,-29.806],[-69.922,-29.94],[-69.94,-30.012],[-69.976,-30.058],[-69.972,-30.09],[-69.918,-30.088],[-69.882,-30.1],[-69.85,-30.127],[-69.835,-30.162],[-69.85,-30.2],[-69.893,-30.238],[-69.911,-30.33],[-69.965,-30.375],[-70.03,-30.397],[-70.066,-30.389],[-70.149,-30.353],[-70.174,-30.382],[-70.145,-30.439],[-70.163,-30.47],[-70.195,-30.487],[-70.217,-30.515],[-70.235,-30.591],[-70.271,-30.657],[-70.275,-30.725],[-70.318,-30.801],[-70.339,-30.938],[-70.336,-30.956],[-70.267,-31.024],[-70.278,-31.039],[-70.321,-31.034],[-70.361,-31.073],[-70.383,-31.122],[-70.408,-31.15],[-70.437,-31.142],[-70.447,-31.098],[-70.48,-31.096],[-70.537,-31.172],[-70.548,-31.265],[-70.57,-31.304],[-70.555,-31.363],[-70.577,-31.414],[-70.581,-31.505],[-70.591,-31.549],[-70.581,-31.593],[-70.527,-31.684],[-70.487,-31.731],[-70.476,-31.821],[-70.429,-31.87],[-70.393,-31.878],[-70.314,-31.881],[-70.275,-31.907],[-70.242,-31.961],[-70.267,-32.001],[-70.275,-32.039],[-70.311,-32.047],[-70.372,-32.03],[-70.386,-32.062],[-70.361,-32.086],[-70.357,-32.123],[-70.336,-32.15],[-70.347,-32.175],[-70.329,-32.219],[-70.329,-32.256],[-70.311,-32.288],[-70.271,-32.299],[-70.242,-32.331],[-70.246,-32.403],[-70.228,-32.435],[-70.188,-32.454],[-70.159,-32.486],[-70.159,-32.542],[-70.138,-32.569],[-70.177,-32.581],[-70.181,-32.63],[-70.156,-32.738],[-70.141,-32.768],[-70.055,-32.851],[-70.001,-32.876],[-70.033,-32.977],[-70.055,-33.001],[-70.087,-33.008],[-70.113,-33.038],[-70.091,-33.092],[-70.109,-33.17],[-70.087,-33.202],[-70.041,-33.239],[-70.012,-33.3],[-69.983,-33.295],[-69.94,-33.242],[-69.904,-33.237],[-69.835,-33.266],[-69.814,-33.29],[-69.806,-33.344],[-69.788,-33.379],[-69.796,-33.415],[-69.832,-33.459],[-69.842,-33.533],[-69.875,-33.548],[-69.871,-33.585],[-69.896,-33.663],[-69.86,-33.727],[-69.907,-33.761],[-69.914,-33.793],[-69.896,-33.871],[-69.911,-33.955],[-69.864,-33.958],[-69.857,-34.031],[-69.864,-34.107],[-69.875,-34.141],[-69.828,-34.234],[-69.832,-34.244],[-69.904,-34.269],[-69.911,-34.284],[-69.99,-34.269],[-70.041,-34.278],[-70.066,-34.313],[-70.059,-34.396],[-70.113,-34.448],[-70.167,-34.538],[-70.228,-34.585],[-70.242,-34.619],[-70.253,-34.696],[-70.275,-34.727],[-70.318,-34.745],[-70.278,-34.798],[-70.354,-34.953],[-70.372,-35.024],[-70.368,-35.097],[-70.386,-35.167],[-70.545,-35.21],[-70.581,-35.26],[-70.559,-35.299],[-70.476,-35.314],[-70.44,-35.333],[-70.429,-35.357],[-70.473,-35.38],[-70.444,-35.461],[-70.408,-35.507],[-70.419,-35.547],[-70.411,-35.608],[-70.422,-35.661],[-70.375,-35.762],[-70.357,-35.816],[-70.419,-35.868],[-70.422,-35.904],[-70.39,-35.905],[-70.411,-35.97],[-70.383,-36.03],[-70.386,-36.059],[-70.411,-36.084],[-70.429,-36.13],[-70.451,-36.152],[-70.498,-36.164],[-70.57,-36.138],[-70.602,-36.187],[-70.674,-36.253],[-70.703,-36.26],[-70.732,-36.334],[-70.714,-36.368],[-70.717,-36.415],[-70.807,-36.434],[-70.89,-36.4],[-70.915,-36.419],[-70.933,-36.473],[-70.969,-36.486],[-71.045,-36.485],[-71.063,-36.52],[-71.07,-36.604],[-71.056,-36.687],[-71.074,-36.697],[-71.131,-36.677],[-71.149,-36.704],[-71.146,-36.741],[-71.193,-36.858],[-71.164,-36.873],[-71.167,-36.922],[-71.139,-36.937],[-71.142,-36.966],[-71.189,-36.986],[-71.149,-37.013],[-71.139,-37.062],[-71.088,-37.104],[-71.124,-37.119],[-71.149,-37.155],[-71.146,-37.214],[-71.207,-37.293],[-71.196,-37.344],[-71.167,-37.391],[-71.135,-37.425],[-71.117,-37.467],[-71.142,-37.543],[-71.131,-37.591],[-71.185,-37.626],[-71.193,-37.661],[-71.185,-37.705],[-71.135,-37.839],[-71.095,-37.898],[-71.088,-37.94],[-71.052,-38],[-60,-38],[-60,-24.027],[-60.032,-24.008],[-60.072,-24.004],[-60.144,-24.025],[-60.22,-24.028],[-60.295,-24.016],[-60.328,-24.018],[-60.389,-23.987],[-60.425,-23.989],[-60.486,-23.977],[-60.536,-23.947],[-60.572,-23.947],[-60.594,-23.913],[-60.644,-23.891],[-60.691,-23.893],[-60.731,-23.873],[-60.839,-23.873],[-60.9,-23.83],[-60.936,-23.813],[-60.976,-23.824],[-61.008,-23.805],[-61.066,-23.716],[-61.091,-23.702],[-61.12,-23.667],[-61.109,-23.607],[-61.141,-23.592],[-61.181,-23.557],[-61.213,-23.557],[-61.271,-23.523],[-61.296,-23.481],[-61.361,-23.455],[-61.4,-23.45],[-61.451,-23.417],[-61.501,-23.408],[-61.526,-23.374],[-61.516,-23.346],[-61.555,-23.339],[-61.606,-23.29],[-61.667,-23.283],[-61.746,-23.234],[-61.757,-23.177],[-61.804,-23.145],[-61.843,-23.097],[-61.955,-23.035],[-62.009,-22.969],[-62.005,-22.937],[-62.052,-22.864],[-62.088,-22.821],[-62.117,-22.8],[-62.171,-22.718],[-62.174,-22.685],[-62.196,-22.674],[-62.189,-22.638],[-62.254,-22.604],[-62.232,-22.555],[-62.286,-22.485],[-62.369,-22.464],[-62.437,-22.42],[-62.47,-22.382],[-62.524,-22.365],[-62.563,-22.322],[-62.624,-22.306],[-62.624,-22.246],[-62.65,-22.235],[-62.678,-22.194],[-62.768,-22.145],[-62.79,-22.113],[-62.794,-22.051],[-62.804,-22.003],[-62.862,-21.993],[-63.01,-22.002],[-63.326,-22],[-63.64,-21.998],[-63.679,-22.003],[-63.74,-22.051],[-63.812,-22.003],[-63.906,-21.997],[-63.949,-22.008],[-63.964,-22.059],[-63.996,-22.083],[-64.05,-22.23],[-64.086,-22.258],[-64.162,-22.439],[-64.183,-22.471],[-64.237,-22.517],[-64.252,-22.54],[-64.295,-22.691],[-64.295,-22.763],[-64.327,-22.859],[-64.36,-22.804],[-64.356,-22.751],[-64.403,-22.712],[-64.428,-22.658],[-64.453,-22.643],[-64.457,-22.616],[-64.428,-22.542],[-64.482,-22.491],[-64.507,-22.444],[-64.532,-22.425],[-64.525,-22.385],[-64.572,-22.343],[-64.543,-22.292],[-64.55,-22.255],[-64.586,-22.213],[-64.687,-22.172],[-64.723,-22.184],[-64.763,-22.174],[-64.831,-22.137],[-65.022,-22.096],[-65.458,-22.101],[-65.58,-22.086],[-65.605,-22.1],[-65.746,-22.115],[-65.803,-22.086],[-65.933,-21.944],[-65.954,-21.932],[-66.048,-21.917],[-66.062,-21.865],[-66.095,-21.833],[-66.138,-21.812],[-66.221,-21.787],[-66.239,-21.792],[-66.289,-21.958],[-66.296,-22.051],[-66.307,-22.078],[-66.336,-22.083],[-66.379,-22.127],[-66.509,-22.164],[-66.628,-22.192],[-66.642,-22.213],[-66.7,-22.201],[-66.736,-22.224],[-66.757,-22.268],[-66.768,-22.343],[-66.79,-22.38],[-66.797,-22.436],[-66.908,-22.468],[-66.977,-22.522],[-67.034,-22.525],[-67.024,-22.618],[-67.038,-22.655],[-67.114,-22.711],[-67.142,-22.743],[-67.193,-22.822]]]},"properties":{"n":"Argentina"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-60,-16.278],[-60,-16.169],[-60,-16.163],[-60,-14],[-60.393,-14],[-60.41,-14.055],[-60.436,-14.092],[-60.475,-14.118],[-60.475,-14.177],[-60.461,-14.199],[-60.464,-14.278],[-60.454,-14.297],[-60.4,-14.341],[-60.378,-14.42],[-60.346,-14.491],[-60.338,-14.533],[-60.371,-14.543],[-60.353,-14.575],[-60.302,-14.607],[-60.292,-14.629],[-60.274,-15.019],[-60.274,-15.095],[-60.583,-15.099],[-60.529,-15.144],[-60.353,-15.35],[-60.259,-15.457],[-60.238,-15.502],[-60.205,-15.853],[-60.184,-16.163],[-60.183,-16.169],[-60.18,-16.222],[-60.162,-16.266],[-60.13,-16.272],[-60,-16.278]]]},"properties":{"n":"Brazil"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-62.65,-22.235],[-62.624,-22.246],[-62.624,-22.306],[-62.563,-22.322],[-62.524,-22.365],[-62.47,-22.382],[-62.437,-22.42],[-62.369,-22.464],[-62.286,-22.485],[-62.232,-22.555],[-62.254,-22.604],[-62.189,-22.638],[-62.196,-22.674],[-62.174,-22.685],[-62.171,-22.718],[-62.117,-22.8],[-62.088,-22.821],[-62.052,-22.864],[-62.005,-22.937],[-62.009,-22.969],[-61.955,-23.035],[-61.843,-23.097],[-61.804,-23.145],[-61.757,-23.177],[-61.746,-23.234],[-61.667,-23.283],[-61.606,-23.29],[-61.555,-23.339],[-61.516,-23.346],[-61.526,-23.374],[-61.501,-23.408],[-61.451,-23.417],[-61.4,-23.45],[-61.361,-23.455],[-61.296,-23.481],[-61.271,-23.523],[-61.213,-23.557],[-61.181,-23.557],[-61.141,-23.592],[-61.109,-23.607],[-61.12,-23.667],[-61.091,-23.702],[-61.066,-23.716],[-61.008,-23.805],[-60.976,-23.824],[-60.936,-23.813],[-60.9,-23.83],[-60.839,-23.873],[-60.731,-23.873],[-60.691,-23.893],[-60.644,-23.891],[-60.594,-23.913],[-60.572,-23.947],[-60.536,-23.947],[-60.486,-23.977],[-60.425,-23.989],[-60.389,-23.987],[-60.328,-24.018],[-60.295,-24.016],[-60.22,-24.028],[-60.144,-24.025],[-60.072,-24.004],[-60.032,-24.008],[-60,-24.027],[-60,-19.298],[-60.158,-19.329],[-60.497,-19.398],[-60.835,-19.469],[-61.174,-19.538],[-61.512,-19.607],[-61.739,-19.639],[-61.76,-19.658],[-61.894,-20.001],[-61.944,-20.104],[-62.099,-20.321],[-62.146,-20.382],[-62.268,-20.553],[-62.279,-20.58],[-62.275,-20.671],[-62.275,-20.855],[-62.272,-21],[-62.275,-21.066],[-62.412,-21.5],[-62.491,-21.752],[-62.531,-21.865],[-62.574,-22.002],[-62.628,-22.184],[-62.65,-22.235]]]},"properties":{"n":"Paraguay"}}]};
+const BASE_BORDERS = {"type":"GeometryCollection","geometries":[{"type":"LineString","coordinates":[[-69.511,-17.507],[-69.508,-17.584],[-69.497,-17.621],[-69.475,-17.652],[-69.396,-17.721],[-69.36,-17.76],[-69.335,-17.805],[-69.328,-17.841],[-69.328,-17.915],[-69.302,-17.976],[-69.263,-17.964],[-69.234,-17.993],[-69.158,-18.025],[-69.083,-18.039],[-69.09,-18.082],[-69.155,-18.14],[-69.14,-18.187],[-69.101,-18.234],[-69.097,-18.277],[-69.079,-18.319],[-69.079,-18.398],[-69.043,-18.457],[-69.036,-18.501],[-69.043,-18.601],[-69.032,-18.65],[-69,-18.716],[-69.011,-18.746],[-68.95,-18.868],[-68.96,-18.908],[-68.989,-18.947],[-68.96,-18.969],[-68.921,-19.053],[-68.896,-19.077],[-68.849,-19.092],[-68.816,-19.114],[-68.698,-19.215],[-68.662,-19.273],[-68.6,-19.303],[-68.492,-19.378],[-68.449,-19.435],[-68.496,-19.459],[-68.532,-19.501],[-68.629,-19.643],[-68.69,-19.695],[-68.705,-19.715],[-68.698,-19.746],[-68.618,-19.813],[-68.561,-19.844],[-68.543,-19.935],[-68.564,-19.982],[-68.579,-20.046],[-68.59,-20.056],[-68.654,-20.055],[-68.777,-20.09],[-68.788,-20.126],[-68.723,-20.161],[-68.73,-20.229],[-68.719,-20.262],[-68.68,-20.328],[-68.759,-20.364],[-68.766,-20.421],[-68.73,-20.479],[-68.687,-20.517],[-68.582,-20.563],[-68.51,-20.602],[-68.482,-20.642],[-68.55,-20.7],[-68.572,-20.744],[-68.572,-20.872],[-68.554,-20.914],[-68.51,-20.939],[-68.453,-20.939],[-68.417,-20.96],[-68.208,-21.284],[-68.194,-21.328],[-68.197,-21.571],[-68.19,-21.606],[-68.129,-21.713],[-68.107,-21.789],[-68.093,-21.968],[-68.01,-22.046],[-67.988,-22.057],[-67.956,-22.125],[-67.974,-22.17],[-67.945,-22.208],[-67.934,-22.252],[-67.952,-22.314],[-67.945,-22.355],[-67.906,-22.42],[-67.891,-22.491],[-67.859,-22.547],[-67.859,-22.567],[-67.891,-22.716],[-67.891,-22.794],[-67.877,-22.834],[-67.834,-22.841],[-67.805,-22.878],[-67.772,-22.888],[-67.618,-22.897],[-67.546,-22.893],[-67.193,-22.822]]},{"type":"LineString","coordinates":[[-67.193,-22.822],[-67.013,-23.001],[-67.02,-23.032],[-67.106,-23.298],[-67.178,-23.51],[-67.247,-23.722],[-67.286,-23.834],[-67.34,-24.001],[-67.362,-24.03],[-67.412,-24.055],[-67.51,-24.09],[-67.884,-24.244],[-68.244,-24.386],[-68.327,-24.499],[-68.381,-24.491],[-68.399,-24.501],[-68.438,-24.58],[-68.453,-24.629],[-68.482,-24.599],[-68.503,-24.612],[-68.521,-24.675],[-68.572,-24.769],[-68.579,-24.808],[-68.543,-24.877],[-68.478,-24.899],[-68.471,-24.931],[-68.438,-24.967],[-68.442,-25.021],[-68.42,-25.051],[-68.366,-25.104],[-68.381,-25.137],[-68.42,-25.149],[-68.474,-25.146],[-68.518,-25.183],[-68.554,-25.291],[-68.608,-25.436],[-68.604,-25.51],[-68.554,-25.573],[-68.561,-25.662],[-68.507,-25.728],[-68.485,-25.836],[-68.417,-26.093],[-68.41,-26.144],[-68.42,-26.179],[-68.546,-26.269],[-68.575,-26.304],[-68.593,-26.378],[-68.597,-26.458],[-68.572,-26.551],[-68.32,-26.87],[-68.302,-26.927],[-68.33,-27],[-68.33,-27.045],[-68.377,-27.044],[-68.442,-27.067],[-68.518,-27.077],[-68.557,-27.108],[-68.586,-27.164],[-68.651,-27.152],[-68.719,-27.106],[-68.802,-27.113],[-68.827,-27.137],[-68.881,-27.221],[-68.881,-27.295],[-68.932,-27.395],[-68.957,-27.42],[-69.011,-27.449],[-69.014,-27.5],[-69.029,-27.552],[-69.061,-27.609],[-69.094,-27.64],[-69.076,-27.695],[-69.119,-27.723],[-69.173,-27.923],[-69.216,-27.969],[-69.292,-27.989],[-69.313,-28.015],[-69.367,-28.131],[-69.41,-28.202],[-69.436,-28.209],[-69.475,-28.189],[-69.49,-28.199],[-69.5,-28.251],[-69.554,-28.319],[-69.608,-28.356],[-69.655,-28.401],[-69.673,-28.457],[-69.673,-28.563],[-69.702,-28.584],[-69.742,-28.641],[-69.756,-28.707],[-69.734,-28.812],[-69.763,-28.859],[-69.767,-28.884],[-69.796,-28.921],[-69.806,-28.98],[-69.796,-29.05],[-69.803,-29.099],[-69.821,-29.121],[-69.911,-29.143],[-69.922,-29.168],[-69.99,-29.215],[-69.979,-29.251],[-70.03,-29.278],[-70.041,-29.298],[-70.044,-29.364],[-70.019,-29.404],[-70.012,-29.457],[-69.99,-29.489],[-69.968,-29.583],[-69.972,-29.666],[-69.929,-29.718],[-69.914,-29.806],[-69.922,-29.94],[-69.94,-30.012],[-69.976,-30.058],[-69.972,-30.09],[-69.918,-30.088],[-69.882,-30.1],[-69.85,-30.127],[-69.835,-30.162],[-69.85,-30.2],[-69.893,-30.238],[-69.911,-30.33],[-69.965,-30.375],[-70.03,-30.397],[-70.066,-30.389],[-70.149,-30.353],[-70.174,-30.382],[-70.145,-30.439],[-70.163,-30.47],[-70.195,-30.487],[-70.217,-30.515],[-70.235,-30.591],[-70.271,-30.657],[-70.275,-30.725],[-70.318,-30.801],[-70.339,-30.938],[-70.336,-30.956],[-70.267,-31.024],[-70.278,-31.039],[-70.321,-31.034],[-70.361,-31.073],[-70.383,-31.122],[-70.408,-31.15],[-70.437,-31.142],[-70.447,-31.098],[-70.48,-31.096],[-70.537,-31.172],[-70.548,-31.265],[-70.57,-31.304],[-70.555,-31.363],[-70.577,-31.414],[-70.581,-31.505],[-70.591,-31.549],[-70.581,-31.593],[-70.527,-31.684],[-70.487,-31.731],[-70.476,-31.821],[-70.429,-31.87],[-70.393,-31.878],[-70.314,-31.881],[-70.275,-31.907],[-70.242,-31.961],[-70.267,-32.001],[-70.275,-32.039],[-70.311,-32.047],[-70.372,-32.03],[-70.386,-32.062],[-70.361,-32.086],[-70.357,-32.123],[-70.336,-32.15],[-70.347,-32.175],[-70.329,-32.219],[-70.329,-32.256],[-70.311,-32.288],[-70.271,-32.299],[-70.242,-32.331],[-70.246,-32.403],[-70.228,-32.435],[-70.188,-32.454],[-70.159,-32.486],[-70.159,-32.542],[-70.138,-32.569],[-70.177,-32.581],[-70.181,-32.63],[-70.156,-32.738],[-70.141,-32.768],[-70.055,-32.851],[-70.001,-32.876],[-70.033,-32.977],[-70.055,-33.001],[-70.087,-33.008],[-70.113,-33.038],[-70.091,-33.092],[-70.109,-33.17],[-70.087,-33.202],[-70.041,-33.239],[-70.012,-33.3],[-69.983,-33.295],[-69.94,-33.242],[-69.904,-33.237],[-69.835,-33.266],[-69.814,-33.29],[-69.806,-33.344],[-69.788,-33.379],[-69.796,-33.415],[-69.832,-33.459],[-69.842,-33.533],[-69.875,-33.548],[-69.871,-33.585],[-69.896,-33.663],[-69.86,-33.727],[-69.907,-33.761],[-69.914,-33.793],[-69.896,-33.871],[-69.911,-33.955],[-69.864,-33.958],[-69.857,-34.031],[-69.864,-34.107],[-69.875,-34.141],[-69.828,-34.234],[-69.832,-34.244],[-69.904,-34.269],[-69.911,-34.284],[-69.99,-34.269],[-70.041,-34.278],[-70.066,-34.313],[-70.059,-34.396],[-70.113,-34.448],[-70.167,-34.538],[-70.228,-34.585],[-70.242,-34.619],[-70.253,-34.696],[-70.275,-34.727],[-70.318,-34.745],[-70.278,-34.798],[-70.354,-34.953],[-70.372,-35.024],[-70.368,-35.097],[-70.386,-35.167],[-70.545,-35.21],[-70.581,-35.26],[-70.559,-35.299],[-70.476,-35.314],[-70.44,-35.333],[-70.429,-35.357],[-70.473,-35.38],[-70.444,-35.461],[-70.408,-35.507],[-70.419,-35.547],[-70.411,-35.608],[-70.422,-35.661],[-70.375,-35.762],[-70.357,-35.816],[-70.419,-35.868],[-70.422,-35.904],[-70.39,-35.905],[-70.411,-35.97],[-70.383,-36.03],[-70.386,-36.059],[-70.411,-36.084],[-70.429,-36.13],[-70.451,-36.152],[-70.498,-36.164],[-70.57,-36.138],[-70.602,-36.187],[-70.674,-36.253],[-70.703,-36.26],[-70.732,-36.334],[-70.714,-36.368],[-70.717,-36.415],[-70.807,-36.434],[-70.89,-36.4],[-70.915,-36.419],[-70.933,-36.473],[-70.969,-36.486],[-71.045,-36.485],[-71.063,-36.52],[-71.07,-36.604],[-71.056,-36.687],[-71.074,-36.697],[-71.131,-36.677],[-71.149,-36.704],[-71.146,-36.741],[-71.193,-36.858],[-71.164,-36.873],[-71.167,-36.922],[-71.139,-36.937],[-71.142,-36.966],[-71.189,-36.986],[-71.149,-37.013],[-71.139,-37.062],[-71.088,-37.104],[-71.124,-37.119],[-71.149,-37.155],[-71.146,-37.214],[-71.207,-37.293],[-71.196,-37.344],[-71.167,-37.391],[-71.135,-37.425],[-71.117,-37.467],[-71.142,-37.543],[-71.131,-37.591],[-71.185,-37.626],[-71.193,-37.661],[-71.185,-37.705],[-71.135,-37.839],[-71.095,-37.898],[-71.088,-37.94],[-71.052,-38]]},{"type":"LineString","coordinates":[[-70.393,-18.337],[-70.318,-18.321],[-70.21,-18.331],[-70.134,-18.319],[-70.062,-18.28],[-69.986,-18.265],[-69.922,-18.197],[-69.864,-18.145],[-69.842,-18.113],[-69.781,-17.981],[-69.781,-17.944],[-69.814,-17.888],[-69.828,-17.804],[-69.857,-17.735],[-69.85,-17.692],[-69.817,-17.659],[-69.727,-17.664],[-69.684,-17.655],[-69.637,-17.627],[-69.511,-17.507]]},{"type":"LineString","coordinates":[[-69.511,-17.507],[-69.508,-17.434],[-69.522,-17.37],[-69.598,-17.301],[-69.666,-17.289],[-69.648,-17.263],[-69.623,-17.186],[-69.594,-17.179],[-69.511,-17.111],[-69.428,-17.086],[-69.4,-17.047],[-69.407,-17.015],[-69.364,-16.992],[-69.346,-16.963],[-69.314,-16.908],[-69.223,-16.818],[-69.209,-16.797],[-69.184,-16.728],[-69.112,-16.711],[-69.036,-16.671],[-69.007,-16.634],[-69.036,-16.598],[-69.037,-16.541],[-69.038,-16.525],[-69.029,-16.455],[-69,-16.423],[-68.968,-16.406],[-68.856,-16.363],[-68.834,-16.33],[-68.845,-16.303],[-68.917,-16.267],[-68.982,-16.21],[-69.011,-16.22],[-69.065,-16.211],[-69.094,-16.232],[-69.144,-16.223],[-69.205,-16.169],[-69.211,-16.163],[-69.241,-16.098],[-69.371,-15.789],[-69.425,-15.656],[-69.421,-15.597],[-69.356,-15.502],[-69.349,-15.462],[-69.331,-15.425],[-69.284,-15.406],[-69.292,-15.35],[-69.256,-15.313],[-69.223,-15.301],[-69.209,-15.264],[-69.166,-15.264],[-69.148,-15.234],[-69.212,-15.161],[-69.274,-15.119],[-69.346,-15.016],[-69.385,-14.982],[-69.385,-14.945],[-69.367,-14.901],[-69.371,-14.802],[-69.338,-14.774],[-69.266,-14.751],[-69.252,-14.722],[-69.248,-14.594],[-69.234,-14.574],[-69.169,-14.577],[-69.166,-14.503],[-69.133,-14.491],[-69.076,-14.432],[-69.011,-14.398],[-68.989,-14.379],[-69.014,-14.322],[-69.011,-14.246],[-68.986,-14.229],[-68.885,-14.212],[-68.863,-14.192],[-68.899,-14.055],[-68.917,-14.025],[-68.957,-14]]},{"type":"LineString","coordinates":[[-60.393,-14],[-60.41,-14.055],[-60.436,-14.092],[-60.475,-14.118],[-60.475,-14.177],[-60.461,-14.199],[-60.464,-14.278],[-60.454,-14.297],[-60.4,-14.341],[-60.378,-14.42],[-60.346,-14.491],[-60.338,-14.533],[-60.371,-14.543],[-60.353,-14.575],[-60.302,-14.607],[-60.292,-14.629],[-60.274,-15.019],[-60.274,-15.095],[-60.583,-15.099],[-60.529,-15.144],[-60.353,-15.35],[-60.259,-15.457],[-60.238,-15.502],[-60.205,-15.853],[-60.184,-16.163],[-60.183,-16.169],[-60.18,-16.222],[-60.162,-16.266],[-60.13,-16.272],[-60,-16.278]]},{"type":"LineString","coordinates":[[-60,-19.298],[-60.158,-19.329],[-60.497,-19.398],[-60.835,-19.469],[-61.174,-19.538],[-61.512,-19.607],[-61.739,-19.639],[-61.76,-19.658],[-61.894,-20.001],[-61.944,-20.104],[-62.099,-20.321],[-62.146,-20.382],[-62.268,-20.553],[-62.279,-20.58],[-62.275,-20.671],[-62.275,-20.855],[-62.272,-21],[-62.275,-21.066],[-62.412,-21.5],[-62.491,-21.752],[-62.531,-21.865],[-62.574,-22.002],[-62.628,-22.184],[-62.65,-22.235]]},{"type":"LineString","coordinates":[[-62.65,-22.235],[-62.678,-22.194],[-62.768,-22.145],[-62.79,-22.113],[-62.794,-22.051],[-62.804,-22.003],[-62.862,-21.993],[-63.01,-22.002],[-63.326,-22],[-63.64,-21.998],[-63.679,-22.003],[-63.74,-22.051],[-63.812,-22.003],[-63.906,-21.997],[-63.949,-22.008],[-63.964,-22.059],[-63.996,-22.083],[-64.05,-22.23],[-64.086,-22.258],[-64.162,-22.439],[-64.183,-22.471],[-64.237,-22.517],[-64.252,-22.54],[-64.295,-22.691],[-64.295,-22.763],[-64.327,-22.859],[-64.36,-22.804],[-64.356,-22.751],[-64.403,-22.712],[-64.428,-22.658],[-64.453,-22.643],[-64.457,-22.616],[-64.428,-22.542],[-64.482,-22.491],[-64.507,-22.444],[-64.532,-22.425],[-64.525,-22.385],[-64.572,-22.343],[-64.543,-22.292],[-64.55,-22.255],[-64.586,-22.213],[-64.687,-22.172],[-64.723,-22.184],[-64.763,-22.174],[-64.831,-22.137],[-65.022,-22.096],[-65.458,-22.101],[-65.58,-22.086],[-65.605,-22.1],[-65.746,-22.115],[-65.803,-22.086],[-65.933,-21.944],[-65.954,-21.932],[-66.048,-21.917],[-66.062,-21.865],[-66.095,-21.833],[-66.138,-21.812],[-66.221,-21.787],[-66.239,-21.792],[-66.289,-21.958],[-66.296,-22.051],[-66.307,-22.078],[-66.336,-22.083],[-66.379,-22.127],[-66.509,-22.164],[-66.628,-22.192],[-66.642,-22.213],[-66.7,-22.201],[-66.736,-22.224],[-66.757,-22.268],[-66.768,-22.343],[-66.79,-22.38],[-66.797,-22.436],[-66.908,-22.468],[-66.977,-22.522],[-67.034,-22.525],[-67.024,-22.618],[-67.038,-22.655],[-67.114,-22.711],[-67.142,-22.743],[-67.193,-22.822]]},{"type":"LineString","coordinates":[[-62.65,-22.235],[-62.624,-22.246],[-62.624,-22.306],[-62.563,-22.322],[-62.524,-22.365],[-62.47,-22.382],[-62.437,-22.42],[-62.369,-22.464],[-62.286,-22.485],[-62.232,-22.555],[-62.254,-22.604],[-62.189,-22.638],[-62.196,-22.674],[-62.174,-22.685],[-62.171,-22.718],[-62.117,-22.8],[-62.088,-22.821],[-62.052,-22.864],[-62.005,-22.937],[-62.009,-22.969],[-61.955,-23.035],[-61.843,-23.097],[-61.804,-23.145],[-61.757,-23.177],[-61.746,-23.234],[-61.667,-23.283],[-61.606,-23.29],[-61.555,-23.339],[-61.516,-23.346],[-61.526,-23.374],[-61.501,-23.408],[-61.451,-23.417],[-61.4,-23.45],[-61.361,-23.455],[-61.296,-23.481],[-61.271,-23.523],[-61.213,-23.557],[-61.181,-23.557],[-61.141,-23.592],[-61.109,-23.607],[-61.12,-23.667],[-61.091,-23.702],[-61.066,-23.716],[-61.008,-23.805],[-60.976,-23.824],[-60.936,-23.813],[-60.9,-23.83],[-60.839,-23.873],[-60.731,-23.873],[-60.691,-23.893],[-60.644,-23.891],[-60.594,-23.913],[-60.572,-23.947],[-60.536,-23.947],[-60.486,-23.977],[-60.425,-23.989],[-60.389,-23.987],[-60.328,-24.018],[-60.295,-24.016],[-60.22,-24.028],[-60.144,-24.025],[-60.072,-24.004],[-60.032,-24.008],[-60,-24.027]]}]};
+// Rutas principales (trazado aproximado) y ciudades, solo como fondo
+const BASE_ROADS = [
+  [[-18.48,-70.31],[-19.16,-70.17],[-19.60,-69.95],[-19.996,-69.771],[-20.257,-69.786],[-20.73,-69.62],[-21.20,-69.56],[-21.656,-69.543],[-22.10,-69.55],[-22.40,-69.62],[-22.80,-69.68],[-23.13,-69.68],[-23.337,-69.845],[-23.55,-70.10],[-23.756,-70.308],[-24.20,-70.15],[-24.80,-70.05],[-25.39,-69.97],[-25.70,-70.10],[-26.10,-70.45],[-26.347,-70.622],[-26.75,-70.55],[-27.367,-70.33],[-28.00,-70.60],[-28.576,-70.759],[-29.30,-71.05],[-29.905,-71.25]],
+  [[-20.21,-70.15],[-20.80,-70.18],[-21.40,-70.06],[-22.09,-70.20],[-22.60,-70.28],[-23.10,-70.45],[-23.40,-70.50],[-23.65,-70.40]],
+  [[-23.65,-70.40],[-23.70,-70.35],[-23.756,-70.308]],
+  [[-23.10,-70.45],[-23.03,-70.35],[-22.97,-70.10],[-23.13,-69.68]],
+  [[-23.13,-69.68],[-22.893,-69.32],[-22.456,-68.929]],
+  [[-22.09,-70.20],[-22.20,-69.90],[-22.346,-69.663]],
+  [[-20.27,-70.10],[-20.21,-69.80],[-20.257,-69.786]],
+  [[-20.257,-69.786],[-20.34,-69.655],[-20.4895,-69.3297]],
+  [[-20.4895,-69.3297],[-20.65,-69.05],[-20.987,-68.646]],
+  [[-25.405,-70.485],[-25.45,-70.25],[-25.70,-70.10]],
+  [[-26.347,-70.622],[-26.39,-70.35],[-26.39,-70.05],[-26.30,-69.80],[-26.25,-69.625]],
+  [[-27.367,-70.33],[-26.80,-70.20],[-26.39,-70.05]]
+];
+const BASE_CITIES = [["Arica",-18.478,-70.321,1],["Iquique",-20.214,-70.152,1],["Calama",-22.456,-68.929,1],["Antofagasta",-23.65,-70.40,1],["Copiapó",-27.367,-70.331,1],["La Serena",-29.905,-71.249,1],["Tocopilla",-22.092,-70.198,0],["Mejillones",-23.10,-70.45,0],["Taltal",-25.405,-70.485,0],["Chañaral",-26.347,-70.622,0],["Pozo Almonte",-20.257,-69.786,0],["María Elena",-22.346,-69.663,0],["Diego de Almagro",-26.39,-70.05,0],["Vallenar",-28.576,-70.759,0],["Uyuni",-20.46,-66.82,0],["Salta",-24.78,-65.41,1],["San Pedro de Atacama",-22.91,-68.20,0]];
+function addBaseMap(map, labelSkip){
+  map.getContainer().style.background = "#c8e0ea";
+  if(!map.getPane("base")){ map.createPane("base").style.zIndex = 150; map.createPane("baselbl").style.zIndex = 160; }
+  L.geoJSON(BASE_COUNTRIES, {pane:"base", interactive:false, style: f => ({stroke:false, fillOpacity:1, fillColor: f.properties.n === "Chile" ? "#f5f3f0" : "#efede8"})}).addTo(map);
+  L.geoJSON(BASE_BORDERS, {pane:"base", interactive:false, style:{color:"#b8a9c6", weight:1.1, opacity:.9}}).addTo(map);
+  BASE_ROADS.forEach(r => { L.polyline(r, {pane:"base", interactive:false, color:"#ffffff", weight:2.6, opacity:.9}).addTo(map); L.polyline(r, {pane:"base", interactive:false, color:"#efc59d", weight:1.2, opacity:.95}).addTo(map); });
+  BASE_CITIES.forEach(([n, la, lo, big]) => {
+    if(labelSkip && labelSkip(la, lo, big)) return;
+    L.marker([la, lo], {pane:"baselbl", interactive:false, keyboard:false, icon: L.divIcon({className:"", iconSize:[0,0],
+      html:`<div style="position:absolute;transform:translate(-50%,-50%);white-space:nowrap;font:${big?"10.5pt":"7.5pt"} 'Calibri Light',Calibri,Carlito,Arial,sans-serif;color:${big?"#8a8f96":"#9a9ea4"};text-shadow:0 0 2px #fff,0 0 2px #fff">${n}</div>`})}).addTo(map);
+  });
+}
+function drawRouteMap(el, r, an, from, to){
+  const map = L.map(el, {zoomControl:true, attributionControl:false, zoomSnap:0.25});
+  maps.push(map);
+  const trips = r.trips.filter(t => t.end >= from && t.start <= to);
+  const stopPts = an.stops.map(st => st.pt.g);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", {maxZoom:18, subdomains:"abcd", crossOrigin:true}).addTo(map);
+  const bounds = L.latLngBounds([]);
+  trips.forEach(t => { L.polyline(t.geom, {color:"#0d6aa6", weight:2.6, opacity:1, lineJoin:"round"}).addTo(map); t.geom.forEach(c => bounds.extend(c)); });
+  // lugares con detenciones y sus fechas
+  const places = new Map();
+  for(const st of an.stops){
+    const k = st.pt.g.lat.toFixed(3) + "," + st.pt.g.lon.toFixed(3);
+    if(!places.has(k)) places.set(k, {g:st.pt.g, name:shortName(st.loc), days:new Set()});
+    const P = places.get(k);
+    for(const s of an.stat) if(ov(st.start, st.end, s.ds, s.de) > 0) P.days.add(s.ds);
+  }
+  if(bounds.isValid()) map.fitBounds(bounds, {padding:[22,22], animate:false}); else map.setView([-23.5,-70], 7);
+  addBaseMap(map, (la, lo, big) => stopPts.some(g => hav(g, {lat:la, lon:lo}) < (big ? 6 : 20)));
+  const c = map.getCenter(), placed = [];
+  for(const P of places.values()){
+    const days = [...P.days].sort((a,b)=>a-b).map(x => new Date(x));
+    let right = P.g.lon <= c.lng;
+    const px = map.latLngToContainerPoint([P.g.lat, P.g.lon]);
+    const boxOf = (rt, dy) => rt ? {x1:px.x+3, x2:px.x+105, y1:px.y-15+dy, y2:px.y+15+dy} : {x1:px.x-105, x2:px.x-3, y1:px.y-15+dy, y2:px.y+15+dy};
+    const hits = b => placed.some(q => b.x1 < q.x2 && b.x2 > q.x1 && b.y1 < q.y2 && b.y2 > q.y1);
+    let dy = 0;
+    if(hits(boxOf(right, 0))){ if(!hits(boxOf(!right, 0))) right = !right; else { dy = -32; if(hits(boxOf(right, dy))) dy = 32; } }
+    placed.push(boxOf(right, dy));
+    L.circleMarker([P.g.lat, P.g.lon], {radius:3.6, color:"#333", weight:1, fillColor:"#fff", fillOpacity:1}).addTo(map)
+      .bindTooltip(`${P.name}\n${daysText(days)}`, {permanent:true, direction: right ? "right" : "left", offset:[right ? 3 : -3, dy], className:"mlbl"});
+    bounds.extend([P.g.lat, P.g.lon]);
+  }
+}
+
+$("btnGen").onclick = generate; $("btnGen2").onclick = generate;
+$("btnPrint").onclick = () => {
+  if(!$("report").querySelector(".sheet")){ setStatus("Primero genera el informe.", true); return; }
+  maps.forEach(m => m.invalidateSize());
+  setTimeout(() => window.print(), 300);
+};
+/* ---------- Importar desde PDF / Excel / CSV ---------- */
+const LIBS = {pdf:["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js","https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"],
+              xlsx:["https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"]};
+function loadScript(src){ return new Promise((ok, bad) => { if(document.querySelector(`script[src="${src}"]`)) return ok(); const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => bad(new Error("No se pudo cargar " + src)); document.head.appendChild(sc); }); }
+async function needLib(k){ for(const u of LIBS[k]) await loadScript(u); }
+const nrm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
+const PLATE_RE = /\b([A-Z]{4})[- ]?(\d{2})\b/;
+// tipo de columna según el texto del encabezado
+function colType(h){
+  const t = nrm(h).replace(/[.:()]/g," ").replace(/\s+/g," ").trim();
+  if(!t) return null;
+  if(/^(n|no|n°|nº|#|№|num|numero)$/.test(t) || h.trim() === "№") return "num";
+  if(/^agrupacion/.test(t)) return "grp";
+  if(/^(patente|placa|ppu|vehiculo|movil|unidad)/.test(t)) return "plate";
+  if(/^(codigo|tracto|cod)\b/.test(t)) return "code";
+  if(/ralenti/.test(t)) return "idle";
+  if(/^(kilometraje|km|kms|distancia|kilometros)/.test(t)) return "km";
+  if(/^(velocidad|vel|v max|v\. max|vmax)/.test(t)) return "vmax";
+  if(/^(posicion inicial|desde|origen|lugar|ubicacion|lugar de salida|punto)/.test(t)) return "from";
+  if(/^(posicion final|hasta|destino|lugar de llegada)/.test(t)) return "to";
+  if(/^(fecha fin|fecha de llegada|fecha llegada)/.test(t)) return "enddate";
+  if(/^(fecha y hora|fecha hora|fechahora|sale|datetime|timestamp)$/.test(t)) return "dt";
+  if(/^comienzo/.test(t)) return "start";
+  if(/^(fecha|dia|date)/.test(t)) return "date";
+  if(/^(hora fin|hora de llegada|hora llegada|llega|llegada|fin)/.test(t)) return "end";
+  if(/^(hora inicio|hora salida|hora de salida|hora|inicio|salida|time)/.test(t)) return "time";
+  return null;
+}
+const isHeader = types => types.includes("from") && types.some(x => ["date","dt","start","time"].includes(x));
+const DATE_RE = /(\d{4}-\d{1,2}-\d{1,2})|(\d{1,2}[-\/.]\d{1,2}(?:[-\/.]\d{2,4})?)/;
+function parseDateTime(dateStr, timeStr, yearHint){
+  const s = String(dateStr ?? "") + " " + String(timeStr ?? "");
+  let Y, M, D;
+  let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m){ Y=+m[1]; M=+m[2]; D=+m[3]; }
+  else if((m = s.match(/(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{2,4}))?/))){ D=+m[1]; M=+m[2]; Y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : yearHint; }
+  if(!Y || !M || !D || M > 12 || D > 31) return null;
+  const tm = String(timeStr || "").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/) || String(dateStr || "").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return {d:`${Y}-${p2(M)}-${p2(D)}`, t: tm ? `${p2(+tm[1])}:${tm[2]}:${tm[3]||"00"}` : ""};
+}
+function timeOnly(str){ const m = String(str||"").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/); return m ? `${p2(+m[1])}:${m[2]}:${m[3]||"00"}` : ""; }
+const numOnly = s => { const m = String(s ?? "").replace(/\s/g,"").replace(",", ".").match(/-?\d+(\.\d+)?/); return m ? m[0] : ""; };
+const plateOf = s => { const m = String(s||"").toUpperCase().match(PLATE_RE); return m ? m[1] + "-" + m[2] : ""; };
+// interpreta filas crudas (incluye el formato agrupado de Orvis: total, día y viajes 1.1.1)
+function interpret(raw, ctx){
+  const out = []; let curDate = ""; const dotted = raw.some(r => /\d+\.\d+/.test(r.num || ""));
+  for(const r of raw){
+    const grpIsDate = r.grp && DATE_RE.test(r.grp) && !PLATE_RE.test(r.grp.toUpperCase());
+    if(grpIsDate){ curDate = r.grp; continue; }               // fila resumen del día
+    if(dotted && r.num && !/\d+\.\d+\.\d+/.test(r.num)) continue; // fila total
+    const plate = plateOf(r.plate) || plateOf(r.grp) || ctx.plate || "";
+    let dateSrc = r.date || r.dt || (r.start && DATE_RE.test(r.start) ? r.start : "") || curDate;
+    const timeSrc = r.time || r.start || r.dt || "";
+    if(!dateSrc && !r.from) continue;
+    out.push({plate, code: r.code || ctx.code || "", date: dateSrc, time: timeOnly(timeSrc) || timeSrc, from: r.from, to: r.to, end: r.end, km: numOnly(r.km), vmax: numOnly(r.vmax), idle: r.idle});
+  }
+  return out;
+}
+function recordsToPlates(recs, yearHint, gps, fileName){
+  const by = new Map();
+  for(const r of recs){
+    const k = r.plate || ""; if(!by.has(k)) by.set(k, {name:k, code:r.code||"", recs:[]});
+    const g = by.get(k); if(r.code && !g.code) g.code = r.code; g.recs.push(r);
+  }
+  const out = [];
+  for(const g of by.values()){
+    const undated = g.recs.filter(r => !parseDateTime(r.date, r.time, yearHint) && r.from);
+    const items = g.recs.map(r => { const dt = parseDateTime(r.date, r.time, yearHint); return dt ? Object.assign({}, r, dt) : null; }).filter(Boolean);
+    items.sort((a,b) => (a.d+a.t).localeCompare(b.d+b.t));
+    const hasTo = items.some(r => r.to);
+    const clean = s => String(s || "").replace(/\s+/g," ").trim().replace(/[,;]+$/,"");
+    const rows = items.map((r, i) => {
+      const row = {d:r.d, t:r.t, place: clean(r.from || (i > 0 ? items[i-1].to : "")), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta: timeOnly(r.end)};
+      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; }
+      return row;
+    });
+    if(!hasTo) undated.forEach(r => rows.push({d:"", t:"", place:clean(r.from), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta:""}));
+    if(hasTo && items.length) rows.push({d:"", t:"", place:clean(items[items.length-1].to), idle:"", ta:"", src: gps ? "gps" : undefined, file: gps ? fileName : undefined});
+    if(rows.length) out.push({name:g.name, code:g.code, rows});
+  }
+  return out;
+}
+const GPS_SIG = /viajes y estacionamientos|orvis|gps chile|gpschile/i;
+async function importExcel(file){
+  await needLib("xlsx");
+  const wb = XLSX.read(await file.arrayBuffer(), {type:"array", cellDates:true});
+  const recs = []; let gps = false;
+  for(const sn of wb.SheetNames){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false, dateNF:"dd-mm-yyyy hh:mm:ss", defval:""});
+    if(rows.slice(0, 40).some(r => r.some(c => GPS_SIG.test(String(c))))) gps = true;
+    let hi = -1, map = null;
+    for(let i=0;i<Math.min(rows.length, 40);i++){ const types = rows[i].map(colType); if(isHeader(types)){ hi = i; map = types; break; } }
+    if(hi < 0) continue;
+    const titlePlate = rows.slice(0, hi).map(r => r.map(c => plateOf(c)).find(Boolean)).find(Boolean);
+    const ctx = {plate: plateOf(sn) || titlePlate || plateOf(file.name), code:""};
+    const raw = [];
+    for(const row of rows.slice(hi+1)){
+      if(!row.some(c => String(c).trim())) continue;
+      if(row.map(colType).filter(Boolean).length >= 3) break; // empieza otra tabla
+      const r = {}; map.forEach((t, j) => { if(t && String(row[j]).trim() !== "" && r[t] == null) r[t] = String(row[j]).trim(); });
+      raw.push(r);
+    }
+    recs.push(...interpret(raw, ctx));
+  }
+  return {recs, gps};
+}
+async function importPdf(file){
+  await needLib("pdf");
+  const pdfjs = window.pdfjsLib;
+  pdfjs.GlobalWorkerOptions.workerSrc = LIBS.pdf[1];
+  const doc = await pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer())}).promise;
+  const lines = [];
+  for(let pn=1; pn<=doc.numPages; pn++){
+    const page = await doc.getPage(pn); const tc = await page.getTextContent();
+    const byY = [];
+    for(const it of tc.items){
+      if(!it.str || !it.str.trim()) continue;
+      const x = it.transform[4], y = it.transform[5];
+      let L = byY.find(l => Math.abs(l.y - y) < 2.5); if(!L){ L = {page:pn, y, items:[]}; byY.push(L); }
+      L.items.push({x, w: it.width || 0, s:it.str});
+    }
+    byY.sort((a,b) => b.y - a.y);
+    byY.forEach(l => {
+      l.items.sort((a,b) => a.x - b.x);
+      const merged = [];
+      for(const it of l.items){
+        const pv = merged[merged.length-1];
+        if(pv && it.x - (pv.x + pv.w) < 1.2){ pv.s += it.s; pv.w = it.x + it.w - pv.x; } else merged.push({x:it.x, w:it.w, s:it.s});
+      }
+      l.items = merged.map(i => ({x:i.x, w:i.w, s:i.s.replace(/\s+/g," ").trim()})).filter(i => i.s);
+      l.text = l.items.map(i => i.s).join(" "); if(l.items.length) lines.push(l);
+    });
+  }
+  const gps = lines.slice(0, 80).some(l => GPS_SIG.test(l.text));
+  let year = new Date().getFullYear();
+  const yr = lines.map(l => l.text.match(/\b(20\d{2})\b/)).find(Boolean); if(yr) year = +yr[1];
+  const END_RE = /^(estacionamientos|donde estuvo|detalle diario|resumen|recorrido por etapas|kilometros por dia|mapa)\b/;
+  const ctx = {plate: plateOf(file.name), code: ""};
+  const recs = [];
+  let table = null; // {cols, rows:[{anchor line, extra lines}]}
+  const closeTable = () => {
+    if(!table) return;
+    if(table.pending && table.rows.length){ const last = table.rows[table.rows.length-1]; table.pending.filter(pl => pl.page === last.page && Math.abs(pl.y - last.anchor.y) < 30).forEach(pl => last.extra.push(pl)); }
+    table.pending = null;
+    // asigna cada línea suelta a la fila más cercana (misma página) y arma las celdas
+    const raw = table.rows.map(R => {
+      const cell = {};
+      const all = [R.anchor, ...R.extra].sort((a,b) => b.y - a.y);
+      for(const l of all) for(const it of l.items){
+        const c = colOf(table.cols, it);
+        if(c.type === "x") continue;
+        cell[c.type] = (cell[c.type] ? cell[c.type] + " " : "") + it.s;
+      }
+      return cell;
+    });
+    recs.push(...interpret(raw, Object.assign({}, table.ctx)));
+    table = null;
+  };
+  for(let li=0; li<lines.length; li++){
+    const l = lines[li], t = nrm(l.text);
+    const mt = l.text.match(/PATENTE\s+([A-Z]{4})[- ]?(\d{2})/i); if(mt){ closeTable(); ctx.plate = mt[1].toUpperCase() + "-" + mt[2]; }
+    const mc = l.text.match(/TRACTO\s+([A-Z]{1,4}\d{1,4})\b/i); if(mc) ctx.code = mc[1].toUpperCase();
+    if(/^[A-Z]{4}-?\d{2}$/.test(l.text.trim())){ closeTable(); ctx.plate = plateOf(l.text); continue; }
+    if(END_RE.test(t)){ closeTable(); continue; }
+    const types = l.items.map(i => colType(i.s));
+    if(isHeader(types)){
+      // encabezado repetido en la página siguiente: la tabla continúa
+      const sig = types.map(x => x || "x").join(",");
+      if(table && table.sig === sig && l.page !== table.headerPage){
+        if(table.pending && table.rows.length){ const last = table.rows[table.rows.length-1]; table.pending.filter(pl => pl.page === last.page && Math.abs(pl.y - last.anchor.y) < 30).forEach(pl => last.extra.push(pl)); }
+        table.pending = null; table.headerY = l.y; table.headerPage = l.page; continue;
+      }
+      closeTable();
+      const cols = l.items.map((i, k) => ({x:i.x, w:i.w, type:types[k] || "x"}));
+      // palabras del encabezado en líneas vecinas (p. ej. "Velocidad" / "máxima")
+      for(const nb of [lines[li-1], lines[li+1]]) if(nb && nb.page === l.page && Math.abs(nb.y - l.y) < 14)
+        for(const it of nb.items){ const ty = colType(it.s); if(ty && !cols.some(c => Math.abs(c.x - it.x) < 8)) cols.push({x:it.x, w:it.w, type:ty}); }
+      cols.sort((a,b) => a.x - b.x);
+      table = {cols, rows:[], ctx:Object.assign({}, ctx), headerY:l.y, headerPage:l.page, sig};
+      continue;
+    }
+    if(!table || /pagina \d/.test(t)) continue;
+    if(l.page === table.headerPage && Math.abs(l.y - table.headerY) < 14 && l.items.every(i => colType(i.s))) continue;
+    // ¿es línea ancla? (la primera columna tiene número de fila o fecha)
+    const first = table.cols[0], firstItems = l.items.filter(it => colOf(table.cols, it) === first);
+    const ft = firstItems.map(i => i.s).join(" ");
+    const isAnchor = first.type === "num" ? /^\d+(\.\d+)*$/.test(ft.trim()) : DATE_RE.test(ft);
+    if(isAnchor) table.rows.push({anchor:l, extra:[], page:l.page});
+    else if(table.rows.length) table.pending = (table.pending || []).concat([l]);
+    // reparte las líneas pendientes entre la fila anterior y la actual según la distancia
+    if(isAnchor && table.pending){
+      const cur = table.rows[table.rows.length-1], prev = table.rows[table.rows.length-2];
+      for(const pl of table.pending){
+        if(prev && (pl.page !== cur.page || Math.abs(prev.anchor.y - pl.y) <= Math.abs(cur.anchor.y - pl.y)) && pl.page === prev.page) prev.extra.push(pl);
+        else if(pl.page === cur.page) cur.extra.push(pl);
+      }
+      table.pending = null;
+    }
+  }
+  closeTable();
+  return {recs, year, gps};
+}
+// columna de un texto: la que contiene su inicio o, si los datos van centrados bajo el encabezado, la de centro más cercano
+function colOf(cols, it){
+  let left = null; for(const cc of cols) if(cc.x <= it.x + 3) left = cc;
+  const cx = it.x + (it.w || 0) / 2;
+  let near = cols[0], best = Infinity;
+  for(const cc of cols){ const d = Math.abs(cc.x + (cc.w || 0) / 2 - cx); if(d < best){ best = d; near = cc; } }
+  if(!left) return near;
+  // texto que empieza antes del encabezado de la columna cercana (centrado) → esa columna
+  return near.x > left.x && it.x + (it.w || 0) > near.x ? near : left;
+}
+let importBackup = null;
+$("btnImport").onclick = () => $("fileImport").click();
+$("btnUndoImport").onclick = () => { if(!importBackup) return; S = importBackup; importBackup = null; normalizeState(); save(); loadCfg(); renderPlate(); $("btnUndoImport").hidden = true; setStatus("Se deshizo la importación."); };
+$("fileImport").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if(!f) return;
+  setStatus(`Leyendo ${f.name}…`);
+  try{
+    let recs, gps, year = S.cfg.from ? +S.cfg.from.slice(0,4) : new Date().getFullYear();
+    if(/\.pdf$/i.test(f.name) || f.type === "application/pdf"){ const r = await importPdf(f); recs = r.recs; gps = r.gps; year = r.year || year; }
+    else { const r = await importExcel(f); recs = r.recs; gps = r.gps; }
+    const plates = recordsToPlates(recs, year, gps, f.name);
+    if(!plates.length){ setStatus(`No encontré una tabla de viajes en ${f.name}. La planilla o el PDF deben tener columnas como Fecha, Hora y Lugar (o Desde y Hasta).`, true); return; }
+    importBackup = JSON.parse(JSON.stringify(S));
+    let firstIdx = null, n = 0;
+    for(const np of plates){
+      let idx = np.name ? S.plates.findIndex(p => p.name === np.name) : -1;
+      if(idx < 0 && !np.name) idx = S.active;
+      if(idx < 0 && S.plates[S.active] && !S.plates[S.active].name) idx = S.active;
+      if(idx < 0){ S.plates.push({name:np.name, code:np.code, rows:[]}); idx = S.plates.length-1; }
+      const p = S.plates[idx]; if(np.name) p.name = np.name; if(np.code) p.code = np.code;
+      p.rows = np.rows; n += np.rows.length; if(firstIdx == null) firstIdx = idx;
+    }
+    // periodo desde las fechas importadas
+    const ds = plates.flatMap(p => p.rows.map(r => r.d)).filter(Boolean).sort();
+    if(ds.length){ S.cfg.from = ds[0]; S.cfg.to = ds[ds.length-1]; }
+    S.active = firstIdx; save(); clearInfo(); loadCfg(); renderPlate(); $("btnUndoImport").hidden = false;
+    setStatus(`Se cargaron ${n} filas (${plates.map(p => p.name || "sin patente").join(", ")}) desde ${f.name}. Revisa y corrige la tabla, y luego pulsa "Generar informe".`);
+  }catch(err){ setStatus(`No se pudo leer ${f.name}: ${err.message}. Si no hay internet, la lectura de PDF y Excel no está disponible.`, true); }
+};
+
+loadCfg(); renderPlate();
+</script>
+</body>
+</html>
