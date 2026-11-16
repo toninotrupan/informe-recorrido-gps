@@ -736,10 +736,7 @@ async function computePlate(pi){
     if(g && P && pkm > 0 && P.row.src !== "gps" && !isCoord){ // control: la distancia en línea recta no puede superar los km informados del tramo
       const maxKm = pkm * 1.3 + 30;
       if(hav(P.g, g) > maxKm){
-        setStatus(`Buscando "${r.place}" cerca de ${P.row.place} (${tag})…`);
-        const g2 = await geocodeNear(r.place, cfg.country, P.g, maxKm);
-        if(g2) g = g2;
-        else {
+        {
           rowInfo[pi+"|"+i] = {cls:"bad", text:`El buscador lo ubicó en ${g.addr}, a ${Math.round(hav(P.g, g))} km del lugar anterior (solo ${Math.round(pkm)} km de viaje). No se dibuja en el mapa; los km y horarios ingresados sí se usan. Para dibujarlo, márcalo con clic en el mapa.`};
           errors.push(`${tag}: "${r.place}" no se pudo ubicar en el mapa (los km ingresados se usan igual); márcalo en el mapa si quieres verlo dibujado.`);
           pts.push({i, row:r, g:null, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: r.place.trim()});
