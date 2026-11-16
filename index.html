@@ -642,8 +642,8 @@ async function geocodeNear(place, country, near, maxKm){
   const d = maxKm / 111, box = [near.lon - d*1.2, near.lat + d, near.lon + d*1.2, near.lat - d];
   const qs = [place.replace(/[()]/g, " ").replace(/\s+/g, " ").trim(), place.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim()].filter((v,i,a) => v && a.indexOf(v) === i);
   for(const q of qs){
-    try{ const g = await searchNominatim(q, country, box); if(g && hav(near, g) <= maxKm) return g; }catch(e){ geoNetFail = true; }
-    try{ const g = await searchPhoton(q, country, near); if(g && hav(near, g) <= maxKm) return g; }catch(e){ geoNetFail = true; }
+    try{ const g = await searchNominatim(q, country, box); if(g && hav(near, g) <= maxKm) return g; }catch(e){}
+    try{ const g = await searchPhoton(q, country, near); if(g && hav(near, g) <= maxKm) return g; }catch(e){}
   }
   return null;
 }
@@ -729,7 +729,9 @@ async function computePlate(pi){
     const r = p.rows[i]; if(!r.place || !r.place.trim()) continue;
     setStatus(`Buscando "${r.place}" (${tag})…`);
     let g = null; try{ g = await geocode(r.place, cfg.country); }catch(e){ g = null; }
-    const P = pts[pts.length-1], pkm = P ? parseFloat(P.row.km) : NaN;
+    // último punto ubicado y km acumulados desde él (incluye tramos de puntos sin ubicar)
+    let P = null, pkm = 0;
+    for(let q = pts.length-1; q >= 0; q--){ const k = parseFloat(pts[q].row.km); pkm = k > 0 && pkm >= 0 ? pkm + k : -1; if(pts[q].g){ P = pts[q]; break; } }
     const isCoord = /^\s*-?\d+(\.\d+)?\s*[,; ]\s*-?\d+(\.\d+)?\s*$/.test(r.place);
     if(g && P && pkm > 0 && P.row.src !== "gps" && !isCoord){ // control: la distancia en línea recta no puede superar los km informados del tramo
       const maxKm = pkm * 1.3 + 30;
@@ -737,7 +739,12 @@ async function computePlate(pi){
         setStatus(`Buscando "${r.place}" cerca de ${P.row.place} (${tag})…`);
         const g2 = await geocodeNear(r.place, cfg.country, P.g, maxKm);
         if(g2) g = g2;
-        else { rowInfo[pi+"|"+i] = {cls:"bad", text:`El buscador lo ubicó en ${g.addr}, a ${Math.round(hav(P.g, g))} km del lugar anterior (el tramo tiene ${Math.round(pkm)} km). Márcalo con clic en el mapa.`}; errors.push(`${tag}: "${r.place}" quedó lejos de su ubicación probable; márcalo en el mapa.`); continue; }
+        else {
+          rowInfo[pi+"|"+i] = {cls:"bad", text:`El buscador lo ubicó en ${g.addr}, a ${Math.round(hav(P.g, g))} km del lugar anterior (solo ${Math.round(pkm)} km de viaje). No se dibuja en el mapa; los km y horarios ingresados sí se usan. Para dibujarlo, márcalo con clic en el mapa.`};
+          errors.push(`${tag}: "${r.place}" no se pudo ubicar en el mapa (los km ingresados se usan igual); márcalo en el mapa si quieres verlo dibujado.`);
+          pts.push({i, row:r, g:null, dep: parseDT(r.d, r.t), idle: Math.max(0, parseFloat(String(r.idle).replace(",", ".")) || 0), label: r.place.trim()});
+          continue;
+        }
       }
     }
     if(!g){ rowInfo[pi+"|"+i] = {cls:"bad", text:"Lugar no encontrado. Márcalo con clic en el mapa o escribe \"lugar, comuna\"."}; errors.push(`${tag}: no se encontró "${r.place}"; márcalo en el mapa.`); continue; }
@@ -748,6 +755,14 @@ async function computePlate(pi){
   for(let k=0;k<pts.length-1;k++){
     const A = pts[k], B = pts[k+1];
     if(!A.dep){ rowInfo[pi+"|"+A.i] = {cls:"bad", text:"Falta la fecha u hora de salida."}; errors.push(`${tag}: fila ${A.i+1} sin fecha de salida.`); continue; }
+    if(!A.g || !B.g){ // punto sin ubicar: se usa lo ingresado (km y llegada), sin dibujo en el mapa
+      const gkm0 = parseFloat(A.row.km), gv0 = parseFloat(A.row.vmax);
+      const e0 = A.row.ta ? parseDT(A.row.d, A.row.ta) : null; if(e0 && e0 <= A.dep) e0.setDate(e0.getDate()+1);
+      if(!(gkm0 > 0) || !e0){ errors.push(`${tag}: el tramo ${A.row.place} → ${B.row.place} no tiene km y llegada ingresados; márcalo en el mapa.`); continue; }
+      const v0 = gv0 > 0 ? gv0 : Math.min(cfg.cap || 90, gkm0 / ((e0 - A.dep)/H || 1));
+      trips.push({start:A.dep, end:e0, from:A.label, to:B.label, km:gkm0, vmax:v0, geom:[], a:A, b:B, gps:false, taManual:true, vManual: gv0 > 0});
+      continue;
+    }
     setStatus(`Calculando ruta ${A.row.place} → ${B.row.place} (${tag})…`);
     const rt = await route(A.g, B.g);
     const sec = rt.sec * (cfg.factor || 1);
@@ -1098,13 +1113,14 @@ function drawRouteMap(el, r, an, from, to){
   const map = L.map(el, {zoomControl:true, attributionControl:false, zoomSnap:0.25});
   maps.push(map);
   const trips = r.trips.filter(t => t.end >= from && t.start <= to);
-  const stopPts = an.stops.map(st => st.pt.g);
+  const stopPts = an.stops.map(st => st.pt.g).filter(Boolean);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:18, crossOrigin:true}).addTo(map);
   const bounds = L.latLngBounds([]);
   trips.forEach(t => { L.polyline(t.geom, {color:"#0d6aa6", weight:2.6, opacity:1, lineJoin:"round"}).addTo(map); t.geom.forEach(c => bounds.extend(c)); });
   // lugares con detenciones y sus fechas
   const places = new Map();
   for(const st of an.stops){
+    if(!st.pt.g) continue;
     // lugares a menos de 8 km se juntan en una sola etiqueta para que no se encimen
     let k = st.pt.g.lat.toFixed(3) + "," + st.pt.g.lon.toFixed(3);
     for(const [k2, P2] of places) if(hav(P2.g, st.pt.g) < 8){ k = k2; break; }
