@@ -256,7 +256,7 @@ function normalizeState(){
   const d = sampleState().cfg;
   S.cfg = Object.assign({}, d, S.cfg || {});
   if(!S.cfg.company || S.cfg.company === "T&G Vecchtelligence") S.cfg.company = "LGO Operadores Logísticos";
-  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; } return o; })}));
+  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; } return o; })}));
   if(S.active == null || S.active >= S.plates.length) S.active = 0;
   if(!S.report) S.report = "active";
 }
@@ -327,7 +327,7 @@ function renderPlate(){
   p.rows.forEach((r,i) => {
     const last = i === p.rows.length-1;
     const tr = document.createElement("tr"); if(last) tr.className="final";
-    const info = rowInfo[S.active+"|"+i] || (r.src === "gps" && !last ? {cls:"gps", text:`Dato GPS Chile${r.file ? " (" + r.file + ")" : ""}: llega ${r.ta}${r.km ? ", " + r.km + " km" : ""}${r.vmax ? ", vel. máx. " + r.vmax + " km/h" : ""}`} : null);
+    const info = rowInfo[S.active+"|"+i] || (r.src === "gps" && !last ? {cls:"gps", text:`Dato GPS Chile${r.part ? " (extracto)" : ""}${r.file ? " (" + r.file + ")" : ""}: llega ${r.ta}${r.km ? ", " + r.km + " km" : ""}${r.vmax ? ", vel. máx. " + r.vmax + " km/h" : ""}`} : null);
     tr.innerHTML = `<td class="idx">${i+1}</td>
       <td><input type="date" data-k="d" value="${esc(r.d)}" aria-label="Fecha fila ${i+1}"></td>
       <td><input type="time" step="1" data-k="t" value="${esc(r.t)}" aria-label="Hora salida fila ${i+1}"></td>
@@ -655,7 +655,7 @@ async function computePlate(pi){
     }
     const gkm = parseFloat(A.row.km), gv = parseFloat(A.row.vmax);
     if(A.row.src === "gps" && A.row.ta && end > A.dep && gkm >= 0 && gv >= 0){ // viaje de la exportación GPS: valores reales
-      trips.push({start:A.dep, end, from:A.label, to:B.label, km:gkm, vmax:gv, geom:rt.geom, a:A, b:B, gps:true, file:A.row.file || ""});
+      trips.push({start:A.dep, end, from:A.label, to:B.label, km:gkm, vmax:gv, geom:rt.geom, a:A, b:B, gps:true, part:!!A.row.part, file:A.row.file || ""});
       continue;
     }
     if(rt.approx) routeNetFail = true;
@@ -890,7 +890,11 @@ function sourceHTML(r, an){
   const idleManual = r.pts.some(p => p.idle > 0);
   const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : (g.length ? " La exportación GPS no incluye horas de ralentí." : "");
   let txt, logo = false;
-  if(cfg.gpsShow !== false && g.length && g.length === vt.length){
+  const part = g.some(t => t.part);
+  if(cfg.gpsShow !== false && g.length && g.length === vt.length && part){
+    txt = `Fuente de información: GPS Chile, extracto de los viajes registrados por la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas de esos viajes según GPS Chile. El extracto no incluye los viajes cortos, por lo que los kilómetros y horas pueden ser menores que el total de la plataforma; el trazado del mapa es aproximado.${idleTxt}`;
+    logo = true;
+  } else if(cfg.gpsShow !== false && g.length && g.length === vt.length){
     txt = `Fuente de información: GPS Chile, informe de viajes exportado desde la plataforma${fileTxt}. Horarios, kilómetros y velocidades máximas según GPS Chile; el trazado del mapa es aproximado entre las posiciones registradas.${idleTxt}`;
     logo = true;
   } else if(cfg.gpsShow !== false && g.length){
@@ -1065,7 +1069,7 @@ function recordsToPlates(recs, yearHint, gps, fileName){
     const clean = s => String(s || "").replace(/\s+/g," ").trim().replace(/[,;]+$/,"");
     const rows = items.map((r, i) => {
       const row = {d:r.d, t:r.t, place: clean(r.from || (i > 0 ? items[i-1].to : "")), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta: timeOnly(r.end)};
-      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; }
+      if(gps && row.ta){ row.src = "gps"; row.km = r.km || ""; row.vmax = r.vmax || ""; row.file = fileName; if(gps === "part") row.part = 1; }
       return row;
     });
     if(!hasTo) undated.forEach(r => rows.push({d:"", t:"", place:clean(r.from), idle: r.idle ? String(r.idle).replace(",", ".") : "", ta:""}));
@@ -1075,13 +1079,15 @@ function recordsToPlates(recs, yearHint, gps, fileName){
   return out;
 }
 const GPS_SIG = /viajes y estacionamientos|orvis|gps chile|gpschile/i;
+const PART_SIG = /\bextracto\b/i; // planilla con solo una parte de los viajes del GPS
 async function importExcel(file){
   await needLib("xlsx");
   const wb = XLSX.read(await file.arrayBuffer(), {type:"array", cellDates:true});
-  const recs = []; let gps = false;
+  const recs = []; let gps = false, part = false;
   for(const sn of wb.SheetNames){
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false, dateNF:"dd-mm-yyyy hh:mm:ss", defval:""});
     if(rows.slice(0, 40).some(r => r.some(c => GPS_SIG.test(String(c))))) gps = true;
+    if(rows.slice(0, 10).some(r => r.some(c => PART_SIG.test(String(c))))) part = true;
     let hi = -1, map = null;
     for(let i=0;i<Math.min(rows.length, 40);i++){ const types = rows[i].map(colType); if(isHeader(types)){ hi = i; map = types; break; } }
     if(hi < 0) continue;
@@ -1096,7 +1102,7 @@ async function importExcel(file){
     }
     recs.push(...interpret(raw, ctx));
   }
-  return {recs, gps};
+  return {recs, gps: gps && part ? "part" : gps};
 }
 async function importPdf(file){
   await needLib("pdf");
