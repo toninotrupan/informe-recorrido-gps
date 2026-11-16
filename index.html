@@ -117,6 +117,12 @@ details[open] summary{margin-bottom:10px}
 .sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding:6pt 8pt;border-left:3pt solid var(--rp-blue);background:var(--rp-zebra);font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
 .sheet .src img{height:24pt;width:auto;flex:none}
 .itin .info.gps{color:#1f5f8b}
+.sheet .sign{width:200pt;margin:26pt 0 0 auto;text-align:center;break-inside:avoid}
+.sheet .sign .sigimg{height:46pt;display:flex;align-items:flex-end;justify-content:center}
+.sheet .sign .sigimg img{max-height:46pt;max-width:180pt}
+.sheet .sign .sigline{border-top:0.8pt solid var(--rp-blue);margin:2pt 0 4pt}
+.sheet .sign .signame{font-size:9pt;line-height:1.35;color:var(--rp-blue);font-weight:400}
+.sheet .sign .sigdate{font-size:7pt;color:var(--rp-sub);margin-top:2pt}
 .sheet .chartcap{font-size:7pt;color:var(--rp-sub);text-align:center;margin:0}
 .sheet [contenteditable]:hover{outline:1px dashed #9fb3c8}
 .sheet [contenteditable]:focus{outline:1px solid #096fa6;background:#fffbe6}
@@ -179,6 +185,14 @@ details[open] summary{margin-bottom:10px}
         </div>
       </div>
       <p class="hint">El logo GPS Chile aparece solo en informes con viajes importados desde GPS Chile. GPS Chile se cita como fuente solo para los viajes importados desde un archivo exportado por GPS Chile (con sus horas, km y velocidad máxima reales). Si el itinerario se ingresó a mano o se modificó, el informe dice que esos datos son estimados.</p>
+      <div class="grid2">
+        <label class="f">Firma (una línea por renglón)<textarea id="cfgSigner" rows="2" style="font:inherit;padding:6px 8px;border:1px solid var(--ui-line);border-radius:6px;resize:vertical"></textarea></label>
+        <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ui-muted);font-weight:600">Imagen de firma o timbre (opcional)
+          <div class="row"><img id="sigPrev" class="logoprev" alt="Firma" hidden><button class="btn" id="btnSig" type="button">Subir</button><button class="btn danger" id="btnSigDel" type="button">Quitar</button></div>
+          <input type="file" id="fileSig" accept="image/*" hidden>
+          <label class="check" style="font-weight:400"><input type="checkbox" id="cfgSigShow"> Agregar bloque de firma al final</label>
+        </div>
+      </div>
       <details>
         <summary>Ajustes del cálculo aproximado</summary>
         <div class="grid3">
@@ -253,7 +267,7 @@ const todayISO = () => { const d = new Date(); return d.getFullYear()+"-"+p2(d.g
 
 function sampleState(){
   return {
-    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, lgoShow:true, factor:1.25, cap:90, country:"cl", addr:false},
+    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, lgoShow:true, signer:"Departamento Control Flota\nLGO Ltda.", sig:null, sigShow:true, factor:1.25, cap:90, country:"cl", addr:false},
     active:0, report:"active",
     plates:[
       {name:"SJDR-78", code:"CK93", rows:[
@@ -296,9 +310,15 @@ function loadCfg(){
   $("cfgAddr").checked = !!S.cfg.addr;
   const src = logoSrc(); $("logoPrev").hidden = !src; if(src) $("logoPrev").src = src;
   $("gpsLogoPrev").src = gpsLogoSrc(); $("cfgGpsShow").checked = S.cfg.gpsShow !== false; $("cfgLgoShow").checked = S.cfg.lgoShow !== false;
+  $("cfgSigShow").checked = S.cfg.sigShow !== false; $("cfgSigner").value = S.cfg.signer ?? ""; $("sigPrev").hidden = !S.cfg.sig; if(S.cfg.sig) $("sigPrev").src = S.cfg.sig;
 }
 $("cfgGpsShow").addEventListener("change", e => { S.cfg.gpsShow = e.target.checked; save(); });
 $("cfgLgoShow").addEventListener("change", e => { S.cfg.lgoShow = e.target.checked; save(); });
+$("cfgSigShow").addEventListener("change", e => { S.cfg.sigShow = e.target.checked; save(); });
+$("cfgSigner").addEventListener("input", e => { S.cfg.signer = e.target.value; save(); });
+$("btnSig").onclick = () => $("fileSig").click();
+$("btnSigDel").onclick = () => { S.cfg.sig = null; save(); loadCfg(); };
+$("fileSig").onchange = e => { const f = e.target.files[0]; if(!f) return; const rd = new FileReader(); rd.onload = () => { S.cfg.sig = rd.result; save(); loadCfg(); }; rd.readAsDataURL(f); e.target.value = ""; };
 $("btnGpsLogo").onclick = () => $("fileGpsLogo").click();
 $("btnGpsLogoReset").onclick = () => { S.cfg.gpsLogo = null; save(); loadCfg(); };
 $("fileGpsLogo").onchange = e => {
@@ -917,7 +937,8 @@ function renderReport(r){
       head:`<tr><th>Desde</th><th>Hasta</th><th class="r">Horas</th><th>Lugar</th></tr>`, rows: detRows.length ? detRows : [`<tr><td colspan="4">Sin detenciones de 1 hora o más.</td></tr>`]},
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Viajes de más de 20 km</h2>`},
     {table:true, keepWith:true, width:W, cols:[62.4,62.4,147.2,146.4,34.4,42.2],
-      head:`<tr><th>Sale</th><th>Llega</th><th>Desde</th><th>Hasta</th><th class="r">Km</th><th class="r">Vel.<br>máx.</th></tr>`, rows: vRows.length ? vRows : [`<tr><td colspan="6">Sin viajes de más de 20 km.</td></tr>`]}
+      head:`<tr><th>Sale</th><th>Llega</th><th>Desde</th><th>Hasta</th><th class="r">Km</th><th class="r">Vel.<br>máx.</th></tr>`, rows: vRows.length ? vRows : [`<tr><td colspan="6">Sin viajes de más de 20 km.</td></tr>`]},
+    ...(cfg.sigShow !== false && (cfg.signer || cfg.sig) ? [{html:`<div class="sign"><div class="sigimg">${cfg.sig ? `<img src="${cfg.sig}" alt="">` : ""}</div><div class="sigline"></div><div class="signame" ${CE}>${esc(cfg.signer || "").replace(/\n/g, "<br>")}</div><div class="sigdate" ${CE}>Emitido el ${gen}</div></div>`}] : [])
   ];
   flow(blocks, {left:58.5, top:106, width:500, height:636}, {left:58.5, top:104, width:500, height:638}, {first:{bars:true, logo:true, foot}, cont:{foot}});
   // contenteditable en tablas generadas
@@ -951,21 +972,30 @@ function sourceHTML(r, an){
   return `<div class="src"><span>${esc(txt + plateTxt)}</span></div>`;
 }
 function chartSVG(stat){
-  const W = 448, Hh = 175, left = 34, top = 6, plotH = 120, base = top + plotH;
-  const maxV = Math.max(1, ...stat.map(s => Math.round(s.km)));
-  const steps = [10,20,25,50,100,200,250,500,1000]; let step = steps.find(s => maxV/s <= 3.5) || 1000; const ymax = Math.ceil(maxV/step)*step;
-  const n = stat.length, plotW = W - left - 8, slot = plotW / n, bw = Math.min(30, slot*0.6);
-  const y = v => base - v/ymax*plotH;
-  let g = `<svg width="${W}pt" height="${Hh}pt" viewBox="0 0 ${W} ${Hh}" style="display:block;margin:16pt 0 2pt 27pt" font-family="Calibri Light, Calibri, Carlito, Arial, sans-serif">`;
-  g += `<line x1="${left}" y1="${top}" x2="${left}" y2="${base}" stroke="#bfbfbf" stroke-width="0.75"/><line x1="${left}" y1="${base}" x2="${left+plotW}" y2="${base}" stroke="#bfbfbf" stroke-width="0.75"/>`;
-  for(let v = 0; v <= ymax; v += step){ g += `<line x1="${left-3}" y1="${y(v)}" x2="${left}" y2="${y(v)}" stroke="#bfbfbf" stroke-width="0.75"/><text x="${left-6}" y="${y(v)+2.5}" font-size="7.5" fill="#404040" text-anchor="end">${v}</text>`; }
-  g += `<text transform="translate(${left-24},${top+plotH/2}) rotate(-90)" font-size="7.5" fill="#404040" text-anchor="middle">km</text>`;
+  // gráfico moderno: barras redondeadas, guías suaves, valor sobre cada barra y el día con más km destacado
+  const W = 448, Hh = 190, left = 30, top = 18, plotH = 128, base = top + plotH;
+  const vals = stat.map(s => Math.round(s.km)), maxV = Math.max(1, ...vals);
+  const steps = [10,20,25,50,100,200,250,500,1000]; const step = steps.find(x => maxV/x <= 4) || 1000; const ymax = Math.ceil(maxV/step)*step;
+  const n = stat.length, plotW = W - left - 6, slot = plotW / n, bw = Math.max(6, Math.min(34, slot*0.62));
+  const y = v => base - v/ymax*plotH, iMax = vals.indexOf(maxV);
+  let g = `<svg width="${W}pt" height="${Hh}pt" viewBox="0 0 ${W} ${Hh}" style="display:block;margin:12pt 0 2pt 25pt" font-family="Calibri Light, Calibri, Carlito, Arial, sans-serif">`;
+  g += `<defs><linearGradient id="kmg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a86c6"/><stop offset="1" stop-color="#096faa"/></linearGradient></defs>`;
+  for(let v = 0; v <= ymax; v += step){
+    g += `<line x1="${left}" y1="${y(v)}" x2="${left+plotW}" y2="${y(v)}" stroke="${v ? "#e3e9ef" : "#9fb0bf"}" stroke-width="${v ? 0.6 : 0.8}" ${v ? 'stroke-dasharray="2 2"' : ""}/>`;
+    g += `<text x="${left-5}" y="${y(v)+2.5}" font-size="7" fill="#7a8794" text-anchor="end">${v}</text>`;
+  }
+  g += `<text x="${left-5}" y="${top-8}" font-size="7" fill="#7a8794" text-anchor="end">km</text>`;
   stat.forEach((s, i) => {
-    const cx = left + slot*(i+0.5), v = Math.round(s.km);
-    if(v > 0) g += `<rect x="${cx-bw/2}" y="${y(v)}" width="${bw}" height="${base-y(v)}" fill="#096fa6"/>`;
-    g += `<line x1="${cx}" y1="${base}" x2="${cx}" y2="${base+3}" stroke="#bfbfbf" stroke-width="0.75"/>`;
-    g += `<text x="${cx}" y="${base+13}" font-size="7.5" fill="#404040" text-anchor="middle">${dm(s.d)}</text><text x="${cx}" y="${base+23}" font-size="7.5" fill="#404040" text-anchor="middle">${v} km</text>`;
+    const cx = left + slot*(i+0.5), v = vals[i];
+    if(v > 0){
+      const h = Math.max(1.5, base - y(v)), r = Math.min(3, bw/2, h);
+      const x0 = cx - bw/2, y0 = base - h;
+      g += `<path d="M${x0},${base} V${y0+r} Q${x0},${y0} ${x0+r},${y0} H${x0+bw-r} Q${x0+bw},${y0} ${x0+bw},${y0+r} V${base} Z" fill="${i === iMax ? "#ffaa00" : "url(#kmg)"}"/>`;
+      g += `<text x="${cx}" y="${y0-4}" font-size="7.5" fill="${i === iMax ? "#b77900" : "#096faa"}" text-anchor="middle" font-weight="600">${v}</text>`;
+    }
+    g += `<text x="${cx}" y="${base+12}" font-size="7.5" fill="#404040" text-anchor="middle">${dm(s.d)}</text>`;
   });
+  g += `<g transform="translate(${left+plotW-120},${Hh-8})"><rect width="7" height="7" rx="1.5" fill="#ffaa00" y="-6"/><text x="10" y="0" font-size="7" fill="#7a8794">Día con más kilómetros</text></g>`;
   return g + `</svg>`;
 }
 
