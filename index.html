@@ -107,8 +107,8 @@ details[open] summary{margin-bottom:10px}
 .sheet table.t .r{text-align:right}
 .sheet table.sum{font-size:9pt;line-height:11pt}
 .sheet table.sum th,.sheet table.sum td{padding:1.8pt 4pt 1.8pt 4pt}
-.sheet .stg h3{font-size:9.5pt;font-weight:300;color:var(--rp-blue);margin:0 0 3pt;line-height:12pt}
-.sheet .stg p{font-size:9pt;line-height:14pt;margin:0 0 7pt}
+.sheet .stg h3{font-size:calc(var(--stg,9pt) + .5pt);font-weight:300;color:var(--rp-blue);margin:0 0 calc(var(--stg,9pt) * .3);line-height:1.25}
+.sheet .stg p{font-size:var(--stg,9pt);line-height:1.5;margin:0 0 calc(var(--stg,9pt) * .75)}
 .sheet .note{font-size:7pt;color:var(--rp-sub);margin:2pt 0 0}
 .sheet .rmap{position:absolute;border:0.75pt solid #a6a6a6;background:#c8e0ea}
 .sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding-top:6pt;border-top:0.75pt solid #bfbfbf;font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
@@ -738,6 +738,8 @@ function routeSummary(an, from){
   });
   return parts.length ? "Ruta del período: " + joinY(parts) + "." : "Ruta del período: sin viajes en el período.";
 }
+// lugar corto: hasta dos partes, sin región ni país
+const plShort = s => String(s).split(",").map(x => x.trim()).filter(x => x && !/^(chile|antofagasta|atacama|tarapac[aá]|regi[oó]n)/i.test(x) || false).slice(0, 2).join(", ") || shortName(s);
 function stagesOf(an, r){
   const out = [], st = an.stat; let i = 0;
   const placeAt = s => s.places[s.places.length-1] || "";
@@ -746,16 +748,18 @@ function stagesOf(an, r){
     if(!s.starts.length && !s.arrivals.length && s.km < 1){
       let j = i; while(j+1 < st.length && !st[j+1].starts.length && !st[j+1].arrivals.length && st[j+1].km < 1) j++;
       const pl = placeAt(s) || placeAt(st[j]);
-      out.push({h: dayRange(st[i].d, st[j].d), p: j > i ? `${pl}. No sale en esos días.` : `Detenido todo el día en ${pl}.`});
+      out.push({h: dayRange(st[i].d, st[j].d), p: j > i ? `Detenido en ${plShort(pl)}; no sale en esos días.` : `Detenido todo el día en ${plShort(pl)}.`});
       i = j + 1; continue;
     }
+    // resumen del día en una frase: primera salida, cantidad de viajes y km, última llegada
     const sent = [];
-    for(const t of s.arrivals) sent.push(`Llega a las ${hm(t.end)} a ${t.to}`);
-    s.starts.forEach((t, k) => {
-      const nextDay = +t.end >= s.de;
-      const arr = nextDay ? `llega el ${dm(t.end)} a las ${hm(t.end)}` : `llega a las ${hm(t.end)}`;
-      sent.push(k === 0 && !s.arrivals.length ? `Sale a las ${hm(t.start)} desde ${t.from} y ${arr} a ${t.to}` : `Vuelve a salir a las ${hm(t.start)} y ${arr} a ${t.to}`);
-    });
+    for(const t of s.arrivals) sent.push(`Llega a las ${hm(t.end)} a ${plShort(t.to)}`);
+    if(s.starts.length){
+      const f = s.starts[0], l = s.starts[s.starts.length-1], n = s.starts.length;
+      const arr = +l.end >= s.de ? `llega el ${dm(l.end)} a las ${hm(l.end)}` : `llega a las ${hm(l.end)}`;
+      const mid = n > 1 ? ` (${n} viajes, ${Math.round(s.km)} km)` : ` (${Math.round(s.km)} km)`;
+      sent.push(`${s.arrivals.length ? "Sale" : "Sale"} a las ${hm(f.start)} desde ${plShort(f.from)}${mid} y ${arr} a ${plShort(l.to)}`);
+    }
     let txt = sent.join(". ");
     const lastT = s.starts[s.starts.length-1] || s.arrivals[s.arrivals.length-1];
     if(lastT && +lastT.end < s.de){ const nxt = r.trips[r.trips.indexOf(lastT)+1]; if(!nxt || +nxt.start >= s.de) txt += ", donde pasa la noche"; }
@@ -882,7 +886,11 @@ function renderReport(r){
   const stBlocks = stg.map(x => ({html:`<div class="stg"><h3 ${CE}>${esc(x.h)}</h3><p ${CE}>${esc(x.p)}</p></div>`}));
   stBlocks.push({html:`<p class="note" ${CE}>Fondo del mapa: OpenStreetMap.</p>`});
   const textBox = wide ? {left:74.4, top:450, width:463, height:290} : {left:300.6, top:131, width:254, height:610};
-  flow(stBlocks, textBox, {left:300.6, top:106, width:254, height:636}, {cont:{bars:true, foot}}, s2);
+  // todo el recorrido por etapas en una sola hoja: se achica la letra hasta que quepa
+  const tb = addBox(s2, textBox); tb.classList.add("stgbox");
+  tb.innerHTML = stBlocks.map(b => b.html).join("");
+  for(let fs = 9; over(tb) && fs > 5.6; fs -= 0.25){ tb.style.setProperty("--stg", fs + "pt"); }
+  if(over(tb)){ tb.innerHTML = ""; tb.remove(); flow(stBlocks, textBox, {left:300.6, top:106, width:254, height:636}, {cont:{bars:true, foot}}, s2); }
   drawRouteMap(md, r, an, from, to);
 
   /* Hoja 3: tablas */
