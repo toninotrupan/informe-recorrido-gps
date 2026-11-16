@@ -225,7 +225,13 @@ details[open] summary{margin-bottom:10px}
       <div class="row" style="background:var(--ui-accent-soft);border-radius:8px;padding:10px">
         <button class="btn primary" id="btnImport" type="button">Importar ruta desde PDF o Excel</button>
         <button class="btn" id="btnUndoImport" type="button" hidden>Deshacer importación</button>
+        <button class="btn" id="btnPaste" type="button">Pegar texto</button>
         <input type="file" id="fileImport" accept=".pdf,.xlsx,.xls,.csv,application/pdf" hidden>
+        <div id="pasteBox" hidden style="flex-basis:100%">
+          <textarea id="pasteTxt" rows="8" style="width:100%;font:12px ui-monospace,Menlo,monospace;box-sizing:border-box" placeholder="Fecha&#9;Hora&#9;Lugar&#10;01-11-2026&#9;08:15&#9;Antofagasta&#10;01-11-2026&#9;14:30&#9;Mejillones"></textarea>
+          <div class="row"><button class="btn primary" id="btnPasteLoad" type="button">Cargar texto</button>
+          <span class="hint">Pega una tabla con una fila de títulos (Fecha, Hora, Lugar, o Desde, Hasta, Llegada, Patente). Sirve copiar desde Excel o Google Sheets; también columnas separadas por punto y coma o por dos espacios.</span></div>
+        </div>
         <span class="hint" style="flex-basis:100%">Acepta el PDF de viajes de la plataforma GPS, informes de recorrido como este, o una planilla Excel/CSV con columnas como Fecha, Hora, Lugar (o Desde, Hasta, Llegada, Patente, Ralentí). Las filas se cargan en la tabla para que las revises y corrijas; después pulsa "Generar informe".</span>
       </div>
       <p class="hint">Cada fila es una salida: el camión sale del <b>lugar</b> en la <b>fecha y hora</b> indicadas y va al lugar de la fila siguiente. La última fila es el destino final; su fecha y hora son opcionales (si las dejas vacías, se queda ahí hasta el fin del periodo). <b>Llegada</b> es la hora real de llegada al lugar siguiente (opcional; si la dejas vacía se calcula con la ruta). <b>Ralentí h</b> son las horas con motor encendido detenido en ese lugar (opcional). Escribe el lugar como quieres que aparezca en el informe, por ejemplo "Mejillones (sector Puerto Angamos)".</p>
@@ -1200,11 +1206,18 @@ async function importExcel(file){
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:false, dateNF:"dd-mm-yyyy hh:mm:ss", defval:""});
     if(rows.slice(0, 40).some(r => r.some(c => GPS_SIG.test(String(c))))) gps = true;
     if(rows.slice(0, 10).some(r => r.some(c => PART_SIG.test(String(c))))) part = true;
+    recs.push(...rowsToRecs(rows, sn, file.name));
+  }
+  return {recs, gps: gps && part ? "part" : gps};
+}
+// filas (arreglo de arreglos) -> registros; usado por Excel/CSV y por el texto pegado
+function rowsToRecs(rows, sn, fname){
+  {
     let hi = -1, map = null;
     for(let i=0;i<Math.min(rows.length, 40);i++){ const types = rows[i].map(colType); if(isHeader(types)){ hi = i; map = types; break; } }
-    if(hi < 0) continue;
+    if(hi < 0) return [];
     const titlePlate = rows.slice(0, hi).map(r => r.map(c => plateOf(c)).find(Boolean)).find(Boolean);
-    const ctx = {plate: plateOf(sn) || titlePlate || plateOf(file.name), code:""};
+    const ctx = {plate: plateOf(sn) || titlePlate || plateOf(fname), code:""};
     const raw = [];
     for(const row of rows.slice(hi+1)){
       if(!row.some(c => String(c).trim())) continue;
@@ -1212,9 +1225,13 @@ async function importExcel(file){
       const r = {}; map.forEach((t, j) => { if(t && String(row[j]).trim() !== "" && r[t] == null) r[t] = String(row[j]).trim(); });
       raw.push(r);
     }
-    recs.push(...interpret(raw, ctx));
+    return interpret(raw, ctx);
   }
-  return {recs, gps: gps && part ? "part" : gps};
+}
+function textToRows(txt){
+  const lines = txt.replace(/\r/g, "").split("\n").filter(l => l.trim());
+  const sep = lines.some(l => l.includes("\t")) ? /\t/ : lines.filter(l => l.includes(";")).length > lines.length/2 ? /;/ : /\s{2,}|\s*\|\s*/;
+  return lines.map(l => l.split(sep).map(c => c.trim()));
 }
 async function importPdf(file){
   await needLib("pdf");
@@ -1332,8 +1349,14 @@ $("fileImport").onchange = async e => {
     let recs, gps, year = S.cfg.from ? +S.cfg.from.slice(0,4) : new Date().getFullYear();
     if(/\.pdf$/i.test(f.name) || f.type === "application/pdf"){ const r = await importPdf(f); recs = r.recs; gps = r.gps; year = r.year || year; }
     else { const r = await importExcel(f); recs = r.recs; gps = r.gps; }
+    applyImport(recs, year, gps, f.name);
+  }catch(err){ setStatus(`No se pudo leer ${f.name}: ${err.message}. Si no hay internet, la lectura de PDF y Excel no está disponible.`, true); }
+};
+function applyImport(recs, year, gps, srcName){
+  const f = {name: srcName};
+  {
     const plates = recordsToPlates(recs, year, gps, f.name);
-    if(!plates.length){ setStatus(`No encontré una tabla de viajes en ${f.name}. La planilla o el PDF deben tener columnas como Fecha, Hora y Lugar (o Desde y Hasta).`, true); return; }
+    if(!plates.length){ setStatus(`No encontré una tabla de viajes en ${f.name}. Debe tener columnas como Fecha, Hora y Lugar (o Desde y Hasta), con una fila de títulos.`, true); return false; }
     importBackup = JSON.parse(JSON.stringify(S));
     let firstIdx = null, n = 0;
     for(const np of plates){
@@ -1349,7 +1372,15 @@ $("fileImport").onchange = async e => {
     if(ds.length){ S.cfg.from = ds[0]; S.cfg.to = ds[ds.length-1]; }
     S.active = firstIdx; save(); clearInfo(); loadCfg(); renderPlate(); $("btnUndoImport").hidden = false;
     setStatus(`Se cargaron ${n} filas (${plates.map(p => p.name || "sin patente").join(", ")}) desde ${f.name}. Revisa y corrige la tabla, y luego pulsa "Generar informe".`);
-  }catch(err){ setStatus(`No se pudo leer ${f.name}: ${err.message}. Si no hay internet, la lectura de PDF y Excel no está disponible.`, true); }
+    return true;
+  }
+}
+$("btnPaste").onclick = () => { const b = $("pasteBox"); b.hidden = !b.hidden; if(!b.hidden) $("pasteTxt").focus(); };
+$("btnPasteLoad").onclick = () => {
+  const t = $("pasteTxt").value; if(!t.trim()){ setStatus("Pega primero el texto con la tabla.", true); return; }
+  const year = S.cfg.from ? +S.cfg.from.slice(0,4) : new Date().getFullYear();
+  // el texto pegado se trata como dato ingresado a mano (no es un archivo exportado de la plataforma)
+  if(applyImport(rowsToRecs(textToRows(t), "", ""), year, false, "el texto pegado")){ $("pasteTxt").value = ""; $("pasteBox").hidden = true; }
 };
 
 /* ---------- Barra para cambiar el ancho del panel de datos ---------- */
