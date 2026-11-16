@@ -749,12 +749,16 @@ async function placeBetween(pts, info, pi){
     if(!(tot > 0)){ k = e; continue; }
     let rt = null; try{ rt = await route(A.g, B.g); }catch(err){ rt = null; }
     const geom = rt && rt.geom && rt.geom.length > 1 ? rt.geom : [[A.g.lat, A.g.lon], [B.g.lat, B.g.lon]];
+    // se avanza desde el punto anterior la distancia recorrida: km ingresados, o velocidad media × tiempo transcurrido
+    let gl = 0; for(let i=1;i<geom.length;i++) gl += hav({lat:geom[i-1][0], lon:geom[i-1][1]}, {lat:geom[i][0], lon:geom[i][1]});
+    const rkm = rt && rt.km > 0 && !rt.approx ? rt.km : gl;
     let acc = 0;
     for(let q=k;q<e;q++){
       acc += w[q-k];
-      const c = alongLine(geom, acc/tot); if(!c) continue;
+      const f = useKm ? Math.min(0.98, acc / (rkm || tot)) : acc / tot; // sin km: velocidad media constante del trayecto
+      const c = alongLine(geom, f); if(!c) continue;
       pts[q].g = {lat:c.lat, lon:c.lon, addr: pts[q].row.place.trim() + " (ubicación estimada sobre la ruta)", src:"estimada"};
-      info[pi+"|"+pts[q].i] = {cls:"ok", text:`Ubicación estimada entre ${A.row.place} y ${B.row.place}, según ${useKm ? "los km" : "la fecha y hora"} de cada tramo. Puedes corregirla con clic en el mapa.`};
+      info[pi+"|"+pts[q].i] = {cls:"ok", text:`Ubicación estimada entre ${A.row.place} y ${B.row.place}, calculada desde el punto anterior con ${useKm ? "los km recorridos" : "la velocidad media y la fecha y hora"} de cada tramo. Puedes corregirla con clic en el mapa.`};
     }
     k = e;
   }
