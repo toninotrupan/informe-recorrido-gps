@@ -912,7 +912,7 @@ function renderReport(r){
   const gen = cfg.gen ? fDate(parseDT(cfg.gen)) : fDate(new Date());
   // pie: empresa · fuente (solo dice GPS Chile si los viajes vienen de GPS Chile) · período
   const vtr = r.trips.filter(t => t.end >= from && t.start <= to), ng = vtr.filter(t => t.gps).length;
-  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : ng ? "Fuente: GPS Chile" : "Fuente: datos ingresados manualmente (estimados)";
+  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : ng ? "Fuente: GPS Chile (incluye viajes modificados manualmente)" : "Fuente: datos ingresados manualmente (estimados)";
   const foot = [cfg.company, srcFoot, periodShort(from, to)].filter(Boolean).join(" · ");
   const now = new Date(), genT = `${gen} · ${p2(now.getHours())}:${p2(now.getMinutes())} h`; // fecha y hora de creación
   const CE = 'contenteditable="true" spellcheck="false"';
@@ -994,12 +994,8 @@ function sourceHTML(r, an){
   const gp = [...new Set(g.map(t => t.gpsPlate).filter(Boolean))].filter(x => x !== r.p.name);
   const plateTxt = gp.length ? ` Atención: los datos GPS de este informe fueron registrados por la patente ${gp.join(", ")}, no por ${r.p.name || "la patente indicada"}.` : "";
   const idleTxt = idleManual ? " Las horas de ralentí fueron ingresadas manualmente." : "";
-  let txt, logo = false;
-  const part = g.some(t => t.part);
-  if(g.length && g.length === vt.length) txt = part ? "Fuente de información: GPS Chile (extracto con viajes de 20 km o más)." : "Fuente de información: GPS Chile.";
-  else if(g.length) txt = "Fuente de información: GPS Chile; incluye viajes modificados manualmente.";
-  else txt = "Fuente de información: datos ingresados manualmente (estimados).";
-  return `<div class="src"><span>${esc(txt + plateTxt)}</span></div>`;
+  // el cuadro de fuente se quitó; la fuente va en el pie. Solo queda el aviso si los datos GPS son de otra patente
+  return plateTxt ? `<div class="src"><span>${esc(plateTxt.trim())}</span></div>` : "";
 }
 function photoBlocks(p){
   const ph = (p.photos || []).filter(x => x.src); if(!ph.length) return [];
