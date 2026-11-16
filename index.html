@@ -27,8 +27,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 .topbar button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.55)}
 .topbar label{display:flex;gap:6px;align-items:center;font-size:13px}
 .topbar select{border-radius:6px;border:0;padding:7px 8px;color:var(--ui-fg);background:#fff}
-.layout{display:grid;grid-template-columns:minmax(0,600px) minmax(0,1fr);gap:18px;padding:18px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));align-items:start}
-@media (max-width:1250px){.layout{grid-template-columns:minmax(0,1fr)}}
+.layout{display:grid;grid-template-columns:minmax(0,var(--left,600px)) 14px minmax(0,1fr);gap:4px;padding:18px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));align-items:start}
+.splitter{align-self:stretch;cursor:col-resize;position:relative;touch-action:none;border-radius:6px}
+.splitter::before{content:"";position:absolute;left:5px;top:0;bottom:0;width:4px;border-radius:2px;background:var(--ui-line)}
+.splitter::after{content:"⋮";position:sticky;top:45vh;display:block;text-align:center;color:var(--ui-muted);font-size:18px;line-height:1;background:var(--ui-bg,#eef1f4);margin-top:40vh}
+.splitter:hover::before,.splitter.drag::before{background:#1888c7}
+body.resizing{cursor:col-resize;user-select:none}
+@media (max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.splitter{display:none}}
 .panel{background:var(--ui-panel);border:1px solid var(--ui-line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .panel + .panel{margin-top:14px}
 .panel h2{font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
@@ -118,7 +123,7 @@ details[open] summary{margin-bottom:10px}
 @page{size:letter;margin:0}
 @media print{
   body{background:#fff}
-  .topbar,.inputs,.preview-note{display:none!important}
+  .topbar,.inputs,.preview-note,.splitter{display:none!important}
   .layout{display:block;padding:0}
   .preview-wrap{overflow:visible}
   #report{display:block}
@@ -217,6 +222,8 @@ details[open] summary{margin-bottom:10px}
       <button class="btn primary" id="btnGen2" type="button">Generar informe</button>
     </section>
   </div>
+
+  <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" tabindex="0" title="Arrastra para cambiar el ancho (doble clic: ancho original)"></div>
 
   <div class="preview-wrap">
     <p class="preview-note">Vista previa en tamaño carta. Puedes corregir cualquier texto haciendo clic sobre él antes de imprimir (los cambios se pierden si vuelves a generar). Para el PDF usa "Imprimir / Guardar PDF", destino "Guardar como PDF", tamaño Carta, márgenes "Ninguno" y activa "Gráficos de fondo".</p>
@@ -1247,6 +1254,22 @@ $("fileImport").onchange = async e => {
   }catch(err){ setStatus(`No se pudo leer ${f.name}: ${err.message}. Si no hay internet, la lectura de PDF y Excel no está disponible.`, true); }
 };
 
+/* ---------- Barra para cambiar el ancho del panel de datos ---------- */
+(function(){
+  const sp = $("splitter"), lay = document.querySelector(".layout");
+  const setW = w => { w = Math.max(340, Math.min(w, window.innerWidth - 360)); lay.style.setProperty("--left", w + "px"); return w; };
+  try{ const w = +localStorage.getItem("gpsLeftWidth"); if(w) setW(w); }catch(e){}
+  const keep = w => { try{ localStorage.setItem("gpsLeftWidth", String(w)); }catch(e){} if(pickMap) pickMap.invalidateSize(); };
+  sp.addEventListener("pointerdown", e => {
+    e.preventDefault(); sp.setPointerCapture(e.pointerId); sp.classList.add("drag"); document.body.classList.add("resizing");
+    const x0 = lay.querySelector(".inputs").getBoundingClientRect().left;
+    const move = ev => setW(ev.clientX - x0);
+    const up = ev => { sp.removeEventListener("pointermove", move); sp.removeEventListener("pointerup", up); sp.classList.remove("drag"); document.body.classList.remove("resizing"); keep(setW(ev.clientX - x0)); };
+    sp.addEventListener("pointermove", move); sp.addEventListener("pointerup", up);
+  });
+  sp.addEventListener("dblclick", () => { lay.style.removeProperty("--left"); try{ localStorage.removeItem("gpsLeftWidth"); }catch(e){} if(pickMap) pickMap.invalidateSize(); });
+  sp.addEventListener("keydown", e => { if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return; const cur = lay.querySelector(".inputs").getBoundingClientRect().width; keep(setW(cur + (e.key === "ArrowRight" ? 30 : -30))); });
+})();
 loadCfg(); renderPlate();
 </script>
 </body>
