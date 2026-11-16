@@ -117,6 +117,15 @@ details[open] summary{margin-bottom:10px}
 .sheet .src{display:flex;align-items:center;gap:8pt;margin-top:14pt;padding:6pt 8pt;border-left:3pt solid var(--rp-blue);background:var(--rp-zebra);font-size:7.5pt;line-height:1.35;color:var(--rp-sub)}
 .sheet .src img{height:24pt;width:auto;flex:none}
 .itin .info.gps{color:#1f5f8b}
+.photos{margin-top:10px;border:1px solid var(--ui-line,#d6e0e8);border-radius:8px;padding:10px}
+.phlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.phitem{display:flex;flex-direction:column;gap:4px;font-size:12px}
+.phitem img{width:100%;height:96px;object-fit:cover;border-radius:6px;background:#eee}
+.phitem input{font-size:12px;width:100%}
+.sheet .phgrid{display:grid;grid-template-columns:1fr 1fr;gap:10pt;margin:0 0 10pt}
+.sheet .phgrid figure{margin:0;break-inside:avoid}
+.sheet .phgrid img{width:100%;height:160pt;object-fit:cover;border:1px solid var(--rp-line);border-radius:3pt;display:block}
+.sheet .phgrid figcaption{font-size:7.5pt;color:#45525c;margin-top:3pt;line-height:1.3}
 .sheet .sign{width:190pt;margin:18pt 6pt 0 auto;text-align:center;break-inside:avoid}
 .sheet .sign .sigimg{height:34pt;display:flex;align-items:flex-end;justify-content:center}
 .sheet .sign .sigimg img{max-height:46pt;max-width:180pt}
@@ -237,6 +246,13 @@ details[open] summary{margin-bottom:10px}
         <button class="btn danger" id="btnDelYes" type="button">Sí, eliminar</button>
         <button class="btn" id="btnDelNo" type="button">Cancelar</button>
       </div>
+      <div class="photos" id="photoBox">
+        <div class="row"><b style="font-size:13px">Fotos dashcam de esta patente</b>
+          <button class="btn" id="btnPhoto" type="button">+ Agregar fotos</button>
+          <input type="file" id="filePhoto" accept="image/*" multiple hidden></div>
+        <p class="hint">Sube fotos descargadas de la cámara de esta misma patente en GPS Chile (Orvis), del período del informe. Escribe en cada una la fecha, hora y lugar que muestra la plataforma. Se agregan al final del informe, dos por fila.</p>
+        <div class="phlist" id="phList"></div>
+      </div>
       <div class="pickwrap">
         <div id="pickMap" class="pickmap" aria-label="Mapa para marcar lugares"></div>
         <p class="hint">Haz clic en el mapa para agregar un lugar: llena la primera fila sin lugar o crea una nueva. Puedes arrastrar los números para corregir un punto. Los lugares escritos con nombre aparecen después de "Generar informe".</p>
@@ -287,7 +303,7 @@ function normalizeState(){
   const d = sampleState().cfg;
   S.cfg = Object.assign({}, d, S.cfg || {});
   if(!S.cfg.company || S.cfg.company === "T&G Vecchtelligence") S.cfg.company = "LGO Operadores Logísticos";
-  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.vmax) o.vmax = r.vmax; if(r.km) o.km = r.km; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; if(r.gpsPlate) o.gpsPlate = r.gpsPlate; } return o; })}));
+  S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", photos:(p.photos||[]).filter(x => x && x.src).map(x => ({src:x.src, cap:x.cap||""})), rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.vmax) o.vmax = r.vmax; if(r.km) o.km = r.km; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; if(r.gpsPlate) o.gpsPlate = r.gpsPlate; } return o; })}));
   if(S.active == null || S.active >= S.plates.length) S.active = 0;
   if(!S.report) S.report = "active";
 }
@@ -355,12 +371,31 @@ function renderReportSelect(){
   if(S.plates.length > 1) sel.add(new Option("Todas", "all"));
   sel.value = [...sel.options].some(x => x.value === cur) ? cur : "active";
 }
+function renderPhotos(p){
+  const L = $("phList"); L.innerHTML = "";
+  (p ? p.photos || [] : []).forEach((ph, i) => {
+    const d = document.createElement("div"); d.className = "phitem";
+    d.innerHTML = `<img src="${ph.src}" alt=""><input data-i="${i}" value="${esc(ph.cap)}" placeholder="Fecha, hora y lugar de la foto" aria-label="Descripción foto ${i+1}"><button class="btn" type="button" data-del="${i}">Quitar</button>`;
+    L.appendChild(d);
+  });
+}
+$("phList").addEventListener("input", e => { const p = plate(); const i = e.target.dataset.i; if(p && i != null){ p.photos[+i].cap = e.target.value; save(); } });
+$("phList").addEventListener("click", e => { const p = plate(); const i = e.target.dataset.del; if(p && i != null){ p.photos.splice(+i, 1); save(); renderPhotos(p); } });
+$("btnPhoto").onclick = () => $("filePhoto").click();
+function shrinkImg(f){ return new Promise((ok, bad) => { const rd = new FileReader(); rd.onerror = bad; rd.onload = () => { const im = new Image(); im.onerror = bad; im.onload = () => { const k = Math.min(1, 1100 / Math.max(im.width, im.height)); const c = document.createElement("canvas"); c.width = Math.round(im.width*k); c.height = Math.round(im.height*k); c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); ok(c.toDataURL("image/jpeg", 0.82)); }; im.src = rd.result; }; rd.readAsDataURL(f); }); }
+$("filePhoto").onchange = async e => {
+  const p = plate(); const fs = [...e.target.files]; e.target.value = ""; if(!p || !fs.length) return;
+  p.photos = p.photos || [];
+  for(const f of fs){ try{ p.photos.push({src: await shrinkImg(f), cap: ""}); }catch(err){ setStatus("No se pudo leer la imagen " + f.name + ".", true); } }
+  save(); renderPhotos(p);
+};
 $("selReport").onchange = e => { S.report = e.target.value; save(); };
 function renderPlate(){
   renderTabs();
   const p = plate(); $("delConfirm").hidden = true;
   if(!p){ $("plName").value=""; $("plCode").value=""; $("itinBody").innerHTML=""; updateGmaps(); refreshPickMap(); return; }
   $("plName").value = p.name; $("plCode").value = p.code;
+  renderPhotos(p);
   const tb = $("itinBody"); tb.innerHTML = "";
   p.rows.forEach((r,i) => {
     const last = i === p.rows.length-1;
@@ -942,6 +977,7 @@ function renderReport(r){
     {html:`<h2 class="sec" style="margin-bottom:8pt" ${CE}>Viajes de más de 20 km</h2>`},
     {table:true, keepWith:true, width:W, cols:[62.4,62.4,147.2,146.4,34.4,42.2],
       head:`<tr><th>Sale</th><th>Llega</th><th>Desde</th><th>Hasta</th><th class="r">Km</th><th class="r">Vel.<br>máx.</th></tr>`, rows: vRows.length ? vRows : [`<tr><td colspan="6">Sin viajes de más de 20 km.</td></tr>`]},
+    ...photoBlocks(r.p),
     ...(cfg.sigShow !== false && (cfg.signer || cfg.sig) ? [{html:`<div class="sign"><div class="sigimg">${cfg.sig ? `<img src="${cfg.sig}" alt="">` : ""}</div><div class="sigline"></div><div class="signame" ${CE}>${esc(cfg.signer || "").replace(/\n/g, "<br>")}</div><div class="sigdate" ${CE}>Fecha: ${gen}<br>Hora: ${genT.split("· ")[1]}</div></div>`}] : [])
   ];
   flow(blocks, {left:58.5, top:106, width:500, height:636}, {left:58.5, top:104, width:500, height:638}, {first:{bars:true, logo:true, foot}, cont:{foot}});
@@ -961,9 +997,19 @@ function sourceHTML(r, an){
   let txt, logo = false;
   const part = g.some(t => t.part);
   if(g.length && g.length === vt.length) txt = part ? "Fuente de información: GPS Chile (extracto con viajes de 20 km o más)." : "Fuente de información: GPS Chile.";
-  else if(g.length) txt = `Fuente de información: GPS Chile (${g.length} de ${vt.length} viajes); ${vt.length - g.length} ${vt.length - g.length === 1 ? "viaje modificado" : "viajes modificados"} manualmente.`;
+  else if(g.length) txt = "Fuente de información: GPS Chile; incluye viajes modificados manualmente.";
   else txt = "Fuente de información: datos ingresados manualmente (estimados).";
   return `<div class="src"><span>${esc(txt + plateTxt)}</span></div>`;
+}
+function photoBlocks(p){
+  const ph = (p.photos || []).filter(x => x.src); if(!ph.length) return [];
+  const CE = 'contenteditable="true" spellcheck="false"', out = [];
+  const fig = x => `<figure><img src="${x.src}" alt=""><figcaption ${CE}>${esc(x.cap || "")}</figcaption></figure>`;
+  for(let i = 0; i < ph.length; i += 2){
+    const head = i ? "" : `<h2 class="sec" style="margin-bottom:8pt" ${CE}>Registro fotográfico dashcam</h2>`;
+    out.push({html:`<div>${head}<div class="phgrid">${ph.slice(i, i+2).map(fig).join("")}</div></div>`});
+  }
+  return out;
 }
 function chartSVG(stat){
   // gráfico moderno: barras redondeadas, guías suaves, valor sobre cada barra y el día con más km destacado
