@@ -912,11 +912,11 @@ function renderReport(r){
   const gen = cfg.gen ? fDate(parseDT(cfg.gen)) : fDate(new Date());
   // pie: empresa · fuente (solo dice GPS Chile si los viajes vienen de GPS Chile) · período
   const vtr = r.trips.filter(t => t.end >= from && t.start <= to), ng = vtr.filter(t => t.gps).length;
-  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : ng ? "Fuente: GPS Chile (incluye viajes modificados manualmente)" : "Fuente: datos ingresados manualmente (estimados)";
+  const srcFoot = ng && ng === vtr.length ? "Fuente: GPS Chile" : "";  // con viajes editados o ingresados a mano no se cita fuente (no se atribuyen a GPS Chile)
   const foot = [cfg.company, srcFoot, periodShort(from, to)].filter(Boolean).join(" · ");
   const now = new Date(), genT = `${gen} · ${p2(now.getHours())}:${p2(now.getMinutes())} h`; // fecha y hora de creación
   const CE = 'contenteditable="true" spellcheck="false"';
-  hdrGps = r.trips.some(t => t.gps);
+  hdrGps = ng > 0 && ng === vtr.length;
 
   /* Hoja 1: resumen y kilómetros por día */
   const s1 = newSheet({foot});
