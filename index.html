@@ -230,7 +230,7 @@ details[open] summary{margin-bottom:10px}
         <div id="pasteBox" hidden style="flex-basis:100%">
           <textarea id="pasteTxt" rows="8" style="width:100%;font:12px ui-monospace,Menlo,monospace;box-sizing:border-box" placeholder="Fecha&#9;Hora&#9;Lugar&#10;01-11-2026&#9;08:15&#9;Antofagasta&#10;01-11-2026&#9;14:30&#9;Mejillones"></textarea>
           <div class="row"><button class="btn primary" id="btnPasteLoad" type="button">Cargar texto</button>
-          <span class="hint">Pega una tabla con una fila de títulos (Fecha, Hora, Lugar, o Desde, Hasta, Llegada, Patente). Sirve copiar desde Excel o Google Sheets; también columnas separadas por punto y coma o por dos espacios.</span></div>
+          <span class="hint">Pega una tabla copiada desde Excel o Google Sheets (con títulos como Fecha, Hora, Lugar, Llegada, Lugar llegada, Km, Vel. máx., Tipo; las filas de estacionamiento o detención se saltan) o separada por punto y coma, barra, comas o dos espacios. También sirven líneas sin títulos, una por salida: "05-11-2026 08:15 Mejillones" o "05-11 20:45 Ruta B-400 → Taltal 22:10 31,8 km 90 km/h". Las horas pueden venir con a.m./p.m. Una última línea solo con el lugar es el destino final.</span></div>
         </div>
         <span class="hint" style="flex-basis:100%">Acepta el PDF de viajes de la plataforma GPS, informes de recorrido como este, o una planilla Excel/CSV con columnas como Fecha, Hora, Lugar (o Desde, Hasta, Llegada, Patente, Ralentí). Las filas se cargan en la tabla para que las revises y corrijas; después pulsa "Generar informe".</span>
       </div>
@@ -1241,8 +1241,9 @@ function colType(h){
   if(/ralenti/.test(t)) return "idle";
   if(/^(kilometraje|km|kms|distancia|kilometros)/.test(t)) return "km";
   if(/^(velocidad|vel|v max|v\. max|vmax)/.test(t)) return "vmax";
-  if(/^(posicion inicial|desde|origen|lugar|ubicacion|lugar de salida|punto)/.test(t)) return "from";
-  if(/^(posicion final|hasta|destino|lugar de llegada)/.test(t)) return "to";
+  if(/^(tipo|estado|evento|actividad|movimiento)$/.test(t)) return "kind";
+  if(/^(posicion final|hasta|destino|lugar de llegada|lugar llegada|lugar destino|llega a)/.test(t)) return "to";
+  if(/^(posicion inicial|desde|origen|lugar|ubicacion|lugar de salida|punto|direccion|sitio)/.test(t)) return "from";
   if(/^(fecha fin|fecha de llegada|fecha llegada)/.test(t)) return "enddate";
   if(/^(fecha y hora|fecha hora|fechahora|sale|datetime|timestamp)$/.test(t)) return "dt";
   if(/^comienzo/.test(t)) return "start";
@@ -1274,7 +1275,10 @@ const plateOf = s => { const m = String(s||"").toUpperCase().match(PLATE_RE); re
 // interpreta filas crudas (incluye el formato agrupado de Orvis: total, día y viajes 1.1.1)
 function interpret(raw, ctx){
   const out = []; let curDate = ""; const dotted = raw.some(r => /\d+\.\d+/.test(r.num || ""));
+  const hasTo = raw.some(r => r.to);
   for(const r of raw){
+    // filas de detención (Tipo = Estacionamiento/Detenido/Parada, o sin destino ni km cuando las demás sí lo tienen): no son viajes
+    if((r.kind && /estacion|detenid|detencion|parad|pausa|ralenti|stop|park|espera|descanso/i.test(nrm(r.kind))) || (hasTo && r.from && !r.to && !r.km && !r.vmax && !/viaje|movim|trip/i.test(nrm(r.kind||"")))){ continue; }
     const grpIsDate = r.grp && DATE_RE.test(r.grp) && !PLATE_RE.test(r.grp.toUpperCase());
     if(grpIsDate){ curDate = r.grp; continue; }               // fila resumen del día
     if(dotted && r.num && !/\d+\.\d+\.\d+/.test(r.num)) continue; // fila total
@@ -1343,9 +1347,44 @@ function rowsToRecs(rows, sn, fname){
   }
 }
 function textToRows(txt){
-  const lines = txt.replace(/\r/g, "").split("\n").filter(l => l.trim());
-  const sep = lines.some(l => l.includes("\t")) ? /\t/ : lines.filter(l => l.includes(";")).length > lines.length/2 ? /;/ : /\s{2,}|\s*\|\s*/;
-  return lines.map(l => l.split(sep).map(c => c.trim()));
+  const lines = txt.replace(/\r/g, "").replace(/\u00a0/g, " ").split("\n").filter(l => l.trim());
+  // con fila de títulos: se prueba con tabulación, punto y coma, barra, dos o más espacios y coma
+  for(const sep of [/\t/, /\s*;\s*/, /\s*\|\s*/, /\s{2,}/, /\s*,\s*/]){
+    let rows = lines.map(l => l.split(sep).map(c => c.trim()));
+    const hi = rows.slice(0, 40).findIndex(r => isHeader(r.map(colType)));
+    if(hi < 0) continue;
+    if(String(sep) === String(/\s*,\s*/)){ // CSV con comas: las comas de más pertenecen al nombre del lugar
+      const hd = rows[hi], n = hd.length, fi = Math.max(0, hd.map(colType).indexOf("from"));
+      rows = rows.map((r, i) => i <= hi || r.length <= n ? r : [...r.slice(0, fi), r.slice(fi, fi + r.length - n + 1).join(", "), ...r.slice(fi + r.length - n + 1)]);
+    }
+    return rows;
+  }
+  return freeTextRows(lines);
+}
+// texto sin fila de títulos: cada línea con fecha y/o hora y un lugar ("05-11-2026 08:15 Mejillones",
+// "05-11 20:45 Ruta B-400 → Agustín Samsó Sivori 21:16 31,8 km 90 km/h"); una línea solo con lugar al final es el destino
+function freeTextRows(lines){
+  const out = [["Fecha", "Hora salida", "Lugar", "Hasta", "Llegada", "Km", "Velocidad"]];
+  const DT = /(\d{4}-\d{1,2}-\d{1,2})|(\b\d{1,2}[-\/.]\d{1,2}(?:[-\/.]\d{2,4})?\b)/;
+  const TM = /\b\d{1,2}:\d{2}(?::\d{2})?(?:\s*[aApP]\.?\s*[mM]\.?(?![a-zA-Z]))?(?:\s*(?:h|hrs?|horas?)\b)?/g;
+  let cur = "", any = false;
+  for(let l of lines){
+    l = l.replace(/^\s*(?:\d+[.)-]\s+)/, ""); // numeración "1." o "1)"
+    let vmax = "", km = "";
+    l = l.replace(/(\d+(?:[.,]\d+)?)\s*km\/h/i, (m, v) => { vmax = v; return " "; });
+    l = l.replace(/(\d+(?:[.,]\d+)?)\s*(?:km|kms|kilometros|kilómetros)\b/i, (m, v) => { km = v; return " "; });
+    const dm = l.match(DT); if(dm){ cur = dm[0]; l = l.replace(dm[0], " "); }
+    const times = (l.match(TM) || []).map(s => s.trim()); l = l.replace(TM, " ");
+    l = l.replace(/\b(sale|salida|llega|llegada|desde|a las|hrs?|el)\b/gi, " ").replace(/\s+/g, " ").trim();
+    const parts = l.split(/\s*(?:→|->|=>|>|\bhasta\b|\s-\s|\s–\s)\s*/i).map(s => s.replace(/^[,;:\-–\s]+|[,;:\-–\s]+$/g, "")).filter(Boolean);
+    if(!parts.length) continue;
+    if(!times.length && !dm){ out.push(["", "", parts[0], "", "", "", ""]); continue; } // destino final
+    out.push([cur, times[0] || "", parts[0], parts[1] || "", times[1] || "", km, vmax]); any = true;
+  }
+  if(!any) return [];
+  // cada salida va al lugar de la línea siguiente cuando no se indicó destino
+  for(let i=1;i<out.length-1;i++) if(!out[i][3]) out[i][3] = out[i+1][2];
+  return out;
 }
 async function importPdf(file){
   await needLib("pdf");
