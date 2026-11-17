@@ -234,6 +234,29 @@ details[open] summary{margin-bottom:10px}
         </div>
         <span class="hint" style="flex-basis:100%">Acepta el PDF de viajes de la plataforma GPS, informes de recorrido como este, o una planilla Excel/CSV con columnas como Fecha, Hora, Lugar (o Desde, Hasta, Llegada, Patente, Ralentí). Las filas se cargan en la tabla para que las revises y corrijas; después pulsa "Generar informe".</span>
       </div>
+      <details id="genBox" style="border:1px solid var(--ui-line);border-radius:8px;padding:8px 10px">
+        <summary style="cursor:pointer;font-weight:600;font-size:13px">Generar ruta desde punto de inicio y punto final</summary>
+        <div class="grid2" style="margin-top:8px">
+          <label class="f">Punto de inicio<input id="genFrom" placeholder="Mejillones"></label>
+          <label class="f">Punto final<input id="genTo" placeholder="Diego de Almagro"></label>
+          <label class="f">Salida (fecha y hora)<input type="datetime-local" id="genDep"></label>
+          <label class="f">Llegada (fecha y hora)<input type="datetime-local" id="genArr"></label>
+        </div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:12.5px;color:var(--ui-muted);font-weight:600">Patrón de manejo y descansos</summary>
+          <div class="grid3" style="margin-top:6px">
+            <label class="f">Manejo continuo máx. (h)<input type="number" id="genDrive" step="0.25" min="0.5" max="12"></label>
+            <label class="f">Descanso corto mín. (min)<input type="number" id="genRestMin" step="5" min="0"></label>
+            <label class="f">Descanso corto máx. (min)<input type="number" id="genRestMax" step="5" min="0"></label>
+            <label class="f">Jornada desde<input type="time" id="genDayStart"></label>
+            <label class="f">Jornada hasta<input type="time" id="genDayEnd"></label>
+            <label class="f">Vel. máx. (km/h)<span style="display:flex;gap:4px"><input type="number" id="genVLo" step="1" min="20" max="140" title="desde"><input type="number" id="genVHi" step="1" min="20" max="140" title="hasta"></span></label>
+          </div>
+          <p class="hint" style="margin-top:6px">Valores tomados de tus informes: tramos de manejo de hasta 2,5 h, descansos de 1 a 2 h entre tramos, velocidad máxima de 75 a 92 km/h por tramo. Fuera de la jornada el camión pasa la noche detenido. Si el tiempo disponible sobra, los descansos se alargan; si falta, se acortan y se maneja fuera de la jornada.</p>
+        </details>
+        <div class="row" style="margin-top:8px"><button class="btn primary" id="btnGenRoute" type="button">Generar ruta</button>
+          <span class="hint">Calcula la ruta, la divide en tramos con descansos y llena la tabla de esta patente (reemplaza sus filas; se puede deshacer). Los datos quedan como estimados.</span></div>
+      </details>
       <p class="hint">Cada fila es una salida: el camión sale del <b>lugar</b> en la <b>fecha y hora</b> indicadas y va al lugar de la fila siguiente. La última fila es el destino final; su fecha y hora son opcionales (si las dejas vacías, se queda ahí hasta el fin del periodo). <b>Llegada</b> es la hora real de llegada al lugar siguiente (opcional; si la dejas vacía se calcula con la ruta). <b>Ralentí h</b> son las horas con motor encendido detenido en ese lugar (opcional). Escribe el lugar como quieres que aparezca en el informe, por ejemplo "Mejillones (sector Puerto Angamos)".</p>
       <div class="itin-wrap">
         <table class="itin">
@@ -289,7 +312,7 @@ const todayISO = () => { const d = new Date(); return d.getFullYear()+"-"+p2(d.g
 
 function sampleState(){
   return {
-    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, lgoShow:true, signer:"Departamento Control Flota\nLGO Ltda.", sig:null, sigShow:true, factor:1.25, cap:90, country:"cl", addr:false},
+    cfg:{from:"2026-11-01", to:"2026-11-10", gen:todayISO(), company:"LGO Operadores Logísticos", logo:null, gpsLogo:null, gpsShow:true, lgoShow:true, signer:"Departamento Control Flota\nLGO Ltda.", sig:null, sigShow:true, factor:1.25, cap:90, country:"cl", addr:false, rg:{from:"", to:"", dep:"", arr:"", drive:2.5, restMin:60, restMax:120, dayStart:"06:00", dayEnd:"20:00", vLo:75, vHi:92}},
     active:0, report:"active",
     plates:[
       {name:"SJDR-78", code:"CK93", rows:[
@@ -308,6 +331,7 @@ let S = ls.get(LS_KEY, null) || sampleState();
 function normalizeState(){
   const d = sampleState().cfg;
   S.cfg = Object.assign({}, d, S.cfg || {});
+  S.cfg.rg = Object.assign({}, d.rg, S.cfg.rg || {});
   if(!S.cfg.company || S.cfg.company === "T&G Vecchtelligence") S.cfg.company = "LGO Operadores Logísticos";
   S.plates = (S.plates || []).map(p => ({name:p.name||"", code:p.code||"", photos:(p.photos||[]).filter(x => x && x.src).map(x => ({src:x.src, cap:x.cap||""})), rows:(p.rows||[]).map(r => { const o = {d:r.d||"", t:r.t||"", place:r.place||"", idle:r.idle ?? "", ta:r.ta || ""}; if(r.vmax) o.vmax = r.vmax; if(r.km) o.km = r.km; if(r.src === "gps"){ o.src = "gps"; o.km = r.km || ""; o.vmax = r.vmax || ""; o.file = r.file || ""; if(r.part) o.part = 1; if(r.gpsPlate) o.gpsPlate = r.gpsPlate; } return o; })}));
   if(S.active == null || S.active >= S.plates.length) S.active = 0;
@@ -329,7 +353,7 @@ function gpsLogoSrc(){ return S.cfg.gpsLogo || DEFAULT_GPS_LOGO; }
 function logoSrc(){ return S.cfg.logo === "" ? "" : (S.cfg.logo || DEFAULT_LOGO); }
 function loadCfg(){
   for(const [id,k] of Object.entries(cfgFields)) $(id).value = S.cfg[k] ?? "";
-  $("cfgAddr").checked = !!S.cfg.addr;
+  $("cfgAddr").checked = !!S.cfg.addr; if(typeof loadGen === "function") loadGen();
   const src = logoSrc(); $("logoPrev").hidden = !src; if(src) $("logoPrev").src = src;
   $("gpsLogoPrev").src = gpsLogoSrc(); $("cfgGpsShow").checked = S.cfg.gpsShow !== false; $("cfgLgoShow").checked = S.cfg.lgoShow !== false;
   $("cfgSigShow").checked = S.cfg.sigShow !== false; $("cfgSigner").value = S.cfg.signer ?? ""; $("sigPrev").hidden = !S.cfg.sig; if(S.cfg.sig) $("sigPrev").src = S.cfg.sig;
@@ -1236,10 +1260,15 @@ function parseDateTime(dateStr, timeStr, yearHint){
   if(m){ Y=+m[1]; M=+m[2]; D=+m[3]; }
   else if((m = s.match(/(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{2,4}))?/))){ D=+m[1]; M=+m[2]; Y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : yearHint; }
   if(!Y || !M || !D || M > 12 || D > 31) return null;
-  const tm = String(timeStr || "").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/) || String(dateStr || "").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  return {d:`${Y}-${p2(M)}-${p2(D)}`, t: tm ? `${p2(+tm[1])}:${tm[2]}:${tm[3]||"00"}` : ""};
+  return {d:`${Y}-${p2(M)}-${p2(D)}`, t: hmsOf(timeStr) || hmsOf(dateStr)};
 }
-function timeOnly(str){ const m = String(str||"").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/); return m ? `${p2(+m[1])}:${m[2]}:${m[3]||"00"}` : ""; }
+// hora "HH:MM[:SS]" con o sin AM/PM ("1:43 PM", "01:43 p. m.") → "13:43:00"
+function hmsOf(str){
+  const m = String(str||"").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([aApP])\.?\s*[mM]\.?(?![a-zA-Z]))?/); if(!m) return "";
+  let hh = +m[1]; if(m[4]){ if(/p/i.test(m[4]) && hh < 12) hh += 12; if(/a/i.test(m[4]) && hh === 12) hh = 0; }
+  return `${p2(hh)}:${m[2]}:${m[3]||"00"}`;
+}
+function timeOnly(str){ return hmsOf(str); }
 const numOnly = s => { const m = String(s ?? "").replace(/\s/g,"").replace(",", ".").match(/-?\d+(\.\d+)?/); return m ? m[0] : ""; };
 const plateOf = s => { const m = String(s||"").toUpperCase().match(PLATE_RE); return m ? m[1] + "-" + m[2] : ""; };
 // interpreta filas crudas (incluye el formato agrupado de Orvis: total, día y viajes 1.1.1)
@@ -1467,6 +1496,130 @@ $("btnPasteLoad").onclick = () => {
   // el texto pegado se trata como dato ingresado a mano (no es un archivo exportado de la plataforma)
   if(applyImport(rowsToRecs(textToRows(t), "", ""), year, false, "el texto pegado")){ $("pasteTxt").value = ""; $("pasteBox").hidden = true; }
 };
+
+/* ---------- Generar ruta desde punto de inicio y punto final ---------- */
+const GEN_IDS = {genFrom:"from", genTo:"to", genDep:"dep", genArr:"arr", genDrive:"drive", genRestMin:"restMin", genRestMax:"restMax", genDayStart:"dayStart", genDayEnd:"dayEnd", genVLo:"vLo", genVHi:"vHi"};
+function loadGen(){ for(const id in GEN_IDS) $(id).value = S.cfg.rg[GEN_IDS[id]] ?? ""; }
+for(const id in GEN_IDS) $(id).addEventListener("input", e => { S.cfg.rg[GEN_IDS[id]] = e.target.value; save(); });
+function seededRand(str){ // números al azar repetibles: la misma ruta y horario dan el mismo resultado
+  let a = 2166136261; for(const c of str){ a ^= c.charCodeAt(0); a = Math.imul(a, 16777619); }
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const isoD = d => d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate());
+const isoT = d => p2(d.getHours())+":"+p2(d.getMinutes())+":"+p2(d.getSeconds());
+async function genRoute(){
+  const p = plate(), cfg = S.cfg, g = cfg.rg;
+  if(!p){ setStatus("Primero crea una patente.", true); return; }
+  const from = (g.from||"").trim(), to = (g.to||"").trim();
+  const dep = g.dep ? new Date(g.dep) : null, arr = g.arr ? new Date(g.arr) : null;
+  if(!from || !to){ setStatus("Escribe el punto de inicio y el punto final.", true); return; }
+  if(!dep || !arr || isNaN(dep) || isNaN(arr)){ setStatus("Ingresa la fecha y hora de salida y de llegada.", true); return; }
+  if(arr <= dep){ setStatus("La llegada debe ser después de la salida.", true); return; }
+  const num = (v, d) => { const x = parseFloat(v); return isFinite(x) ? x : d; };
+  const maxD = Math.max(0.5, num(g.drive, 2.5)) * H;
+  let rMin = Math.max(0, num(g.restMin, 60)), rMax = Math.max(0, num(g.restMax, 120)); if(rMax < rMin) [rMin, rMax] = [rMax, rMin];
+  let vLo = num(g.vLo, 75), vHi = num(g.vHi, 92); if(vHi < vLo) [vLo, vHi] = [vHi, vLo];
+  const hmOf = s => { const m = String(s||"").match(/(\d{1,2}):(\d{2})/); return m ? (+m[1])*60 + (+m[2]) : null; };
+  const dsM = hmOf(g.dayStart), deM = hmOf(g.dayEnd), useDay = dsM != null && deM != null && deM > dsM;
+  $("btnGenRoute").disabled = true;
+  try{
+    setStatus(`Buscando "${from}"…`);
+    const A = await geocode(from, cfg.country); if(!A){ setStatus(`No encontré "${from}". Prueba con "lugar, comuna".`, true); return; }
+    setStatus(`Buscando "${to}"…`);
+    const B = await geocode(to, cfg.country); if(!B){ setStatus(`No encontré "${to}". Prueba con "lugar, comuna".`, true); return; }
+    setStatus(`Calculando ruta ${from} → ${to}…`);
+    const rt = await route(A, B);
+    const drive = rt.sec * (cfg.factor || 1) * 1000, W = arr - dep;
+    if(drive > W){ setStatus(`No alcanza el tiempo: el viaje de ${Math.round(rt.km)} km necesita al menos ${dec1(drive/H)} h de manejo y entre la salida y la llegada hay ${dec1(W/H)} h.`, true); return; }
+    const R = seededRand(from + "|" + to + "|" + g.dep + "|" + g.arr), rnd = (a, b) => a + (b - a) * R();
+    // tramos de manejo: duraciones parecidas (±20%) sin pasar el máximo continuo
+    let n = Math.max(1, Math.ceil(drive / (maxD * 0.85)));
+    if(n === 1 && W - drive > 15*60e3 && drive > 20*60e3) n = 2; // con tiempo de sobra, al menos una detención en el camino
+    let d = [];
+    for(let tries = 0; tries < 20; tries++){
+      const w = Array.from({length:n}, () => rnd(0.8, 1.2)), sw = w.reduce((a,b) => a+b, 0);
+      d = w.map(x => drive * x / sw); if(d.every(x => x <= maxD) || tries === 19) break;
+      if(tries % 4 === 3) n++;
+    }
+    const rest = d.map(() => rnd(rMin, rMax) * 60e3);
+    const dayAt = (t, mins, plusDays) => { const x = new Date(t); return +new Date(x.getFullYear(), x.getMonth(), x.getDate() + (plusDays||0), Math.floor(mins/60), mins % 60); };
+    const sched = withDay => { // horario natural: descansos cortos y, fuera de la jornada, la noche detenido
+      const gaps = [0], night = [false]; let t = +dep + d[0];
+      for(let i=1;i<n;i++){
+        let s = t + rest[i], nt = false;
+        if(withDay && d[i] <= (deM - dsM) * 60e3){
+          if(s < dayAt(s, dsM)){ s = dayAt(s, dsM); nt = true; }
+          if(s + d[i] > dayAt(s, deM)){ s = dayAt(s, dsM, 1); nt = true; }
+        }
+        gaps.push(s - t); night.push(nt); t = s + d[i];
+      }
+      return {gaps, night, end:t};
+    };
+    let sc = sched(useDay); if(sc.end > +arr) sc = sched(false);
+    let starts = null, ends = null;
+    const rmin = x => new Date(Math.round(x/60e3)*60e3);
+    if(sc.end <= +arr && n > 1){
+      // sobra tiempo: los primeros tramos salen a la hora de salida y los últimos se ordenan hacia atrás desde la
+      // llegada; entre ambos grupos queda la detención larga (noches o días detenido), dentro de la jornada
+      const fs = [], fe = []; let t = +dep;
+      for(let i=0;i<n;i++){ t += sc.gaps[i]; fs.push(t); t += d[i]; fe.push(t); }
+      const bs = new Array(n), be = new Array(n); let e = +arr;
+      for(let i=n-1;i>=0;i--){
+        if(i < n-1){
+          e = bs[i+1] - rest[i+1];
+          if(useDay && d[i] <= (deM - dsM) * 60e3){
+            if(e > dayAt(e, deM)) e = dayAt(e, deM);
+            if(e - d[i] < dayAt(e, dsM)) e = dayAt(e, deM, -1);
+          }
+        }
+        be[i] = e; bs[i] = e - d[i];
+      }
+      const ok = k => fe[k] + rMin*60e3 <= bs[k+1];
+      let best = -1; const mid = Math.max(0, Math.round(n/2) - 1);
+      for(let off = 0; off < n && best < 0; off++) for(const k of [mid - off, mid + off]) if(best < 0 && k >= 0 && k <= n-2 && ok(k)) best = k;
+      if(best >= 0){
+        starts = []; ends = [];
+        for(let i=0;i<n;i++){ const fw = i <= best; starts.push(rmin(fw ? fs[i] : bs[i])); ends.push(rmin(fw ? fe[i] : be[i])); }
+      }
+    }
+    if(!starts){
+      const gaps = sc.gaps.slice(), gsum = gaps.reduce((a,b) => a+b, 0);
+      if(sc.end <= +arr){ const slack = +arr - sc.end; if(n > 1) for(let i=1;i<n;i++) gaps[i] += gsum > 0 ? slack * gaps[i] / gsum : slack / (n-1); }
+      else{ const k = (W - drive) / gsum; for(let i=1;i<n;i++) gaps[i] *= k; } // falta tiempo: descansos más cortos
+      starts = []; ends = []; let t = +dep;
+      for(let i=0;i<n;i++){ t += gaps[i]; starts.push(rmin(t)); t += d[i]; ends.push(rmin(t)); }
+    }
+    // puntos de detención sobre la ruta y su nombre (calle o ruta y comuna)
+    const labels = [from], used = {}; used[from.toLowerCase()] = A; let acc = 0;
+    for(let i=1;i<n;i++){
+      acc += d[i-1]; const c = alongLine(rt.geom, acc / drive) || {lat:A.lat + (B.lat-A.lat)*acc/drive, lon:A.lon + (B.lon-A.lon)*acc/drive};
+      setStatus(`Buscando el nombre del punto de detención ${i} de ${n-1}…`);
+      let name = null; try{ name = await reverseAny(c.lat, c.lon); }catch(e){}
+      let label = name || `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}`;
+      const clash = l => { const k = l.toLowerCase(), o = used[k] || geoCache[(cfg.country||"") + "|" + k]; return o && hav(o, c) > 2; };
+      for(let s = 2; clash(label); s++) label = (name || label.replace(/ \(sector \d+\)$/, "")) + ` (sector ${s})`;
+      used[label.toLowerCase()] = c;
+      if(!/^\s*-?\d/.test(label)){ geoCache[(cfg.country||"") + "|" + label.toLowerCase()] = {lat:c.lat, lon:c.lon, addr:name || label, src:"ruta"}; }
+      labels.push(label);
+    }
+    ls.set(LS_GEO, geoCache);
+    const rows = [];
+    for(let i=0;i<n;i++){
+      const km = rt.km * d[i] / drive, avg = km / (d[i] / H);
+      let v = km >= 60 ? rnd(vLo, vHi) : rnd(Math.max(40, vLo - 25), vLo);
+      v = Math.round(Math.max(v, Math.min(vHi, avg + 8)));
+      rows.push({d: isoD(starts[i]), t: isoT(starts[i]), place: labels[i], idle:"", ta: isoT(ends[i]), km: String(Math.max(1, Math.round(km))), vmax: String(v)});
+    }
+    rows.push({d:"", t:"", place: to, idle:""});
+    importBackup = JSON.parse(JSON.stringify(S));
+    p.rows = rows; S.cfg.from = isoD(dep); S.cfg.to = isoD(arr);
+    save(); clearInfo(); loadCfg(); renderPlate(); $("btnUndoImport").hidden = false;
+    let nights = 0; const dnum = x => Math.floor(new Date(x.getFullYear(), x.getMonth(), x.getDate()) / DAY);
+    for(let i=1;i<n;i++) if(starts[i] - ends[i-1] >= 6*H) nights += Math.max(1, dnum(starts[i]) - dnum(ends[i-1]));
+    setStatus(`Ruta generada: ${Math.round(rt.km)} km en ${n} tramo${n>1?"s":""} (${dec1(drive/H)} h de manejo)${nights ? `, ${nights} noche${nights>1?"s":""} detenido` : ""}. Revisa la tabla y pulsa "Generar informe".` + (rt.approx ? " Sin servicio de rutas: la distancia es aproximada." : ""), !!rt.approx);
+  }finally{ $("btnGenRoute").disabled = false; }
+}
+$("btnGenRoute").onclick = () => genRoute().catch(e => setStatus("No se pudo generar la ruta: " + e.message, true));
 
 /* ---------- Barra para cambiar el ancho del panel de datos ---------- */
 (function(){
