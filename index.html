@@ -193,7 +193,7 @@ details[open] summary{margin-bottom:10px}
           <label class="check"><input type="checkbox" id="cfgGpsShow"> Logo GPS Chile en el encabezado</label>
         </div>
       </div>
-      <p class="hint">El logo GPS Chile aparece solo en informes con viajes importados desde GPS Chile. GPS Chile se cita como fuente solo para los viajes importados desde un archivo exportado por GPS Chile (con sus horas, km y velocidad máxima reales). Si el itinerario se ingresó a mano o se modificó, el informe dice que esos datos son estimados.</p>
+      <p class="hint">GPS Chile se cita como fuente solo para los viajes importados desde un archivo exportado por GPS Chile (con sus horas, km y velocidad máxima reales). Si el itinerario se ingresó a mano o se modificó, el informe dice que esos datos son estimados.</p>
       <div class="grid2">
         <label class="f">Firma (una línea por renglón)<textarea id="cfgSigner" rows="2" style="font:inherit;padding:6px 8px;border:1px solid var(--ui-line);border-radius:6px;resize:vertical"></textarea></label>
         <div class="f" style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ui-muted);font-weight:600">Imagen de firma o timbre (opcional)
@@ -801,6 +801,10 @@ async function computePlate(pi){
     if(!A.g || !B.g){ // punto sin ubicar: se usa lo ingresado (km y llegada), sin dibujo en el mapa
       const gkm0 = parseFloat(A.row.km), gv0 = parseFloat(A.row.vmax);
       const e0 = A.row.ta ? parseDT(A.row.d, A.row.ta) : null; if(e0 && e0 <= A.dep) e0.setDate(e0.getDate()+1);
+      if(A.row.src === "gps" && e0 && gkm0 >= 0 && gv0 >= 0){ // viaje de la exportación GPS sin ubicar en el mapa: sigue siendo dato real de GPS Chile
+        trips.push({start:A.dep, end:e0, from:A.label, to:B.label, km:gkm0, vmax:gv0, geom:[], a:A, b:B, gps:true, part:!!A.row.part, file:A.row.file || "", gpsPlate:A.row.gpsPlate || ""});
+        continue;
+      }
       if(!(gkm0 > 0) || !e0){ errors.push(`${tag}: el tramo ${A.row.place} → ${B.row.place} no tiene km y llegada ingresados; márcalo en el mapa.`); continue; }
       const v0 = gv0 > 0 ? gv0 : Math.min(cfg.cap || 90, gkm0 / ((e0 - A.dep)/H || 1));
       trips.push({start:A.dep, end:e0, from:A.label, to:B.label, km:gkm0, vmax:v0, geom:[], a:A, b:B, gps:false, taManual:true, vManual: gv0 > 0});
@@ -920,8 +924,8 @@ let maps = [], hdrGps = false, curRep = 0;
 function newSheet(opts){
   const sh = document.createElement("section"); sh.className = "sheet";
   if(false) sh.insertAdjacentHTML("beforeend", `<div class="bars"><i style="height:28pt;background:var(--rp-blue)"></i><i style="height:24pt;background:var(--rp-blue2)"></i><i style="height:28pt;background:var(--rp-blue3)"></i></div>`);
-  // encabezado: logo de la empresa y logo GPS Chile (este último solo si el informe usa datos de GPS Chile)
-  const lg = S.cfg.lgoShow !== false && logoSrc(), gl = S.cfg.gpsShow !== false && hdrGps;
+  // encabezado: logo de la empresa y logo GPS Chile (siempre, salvo que se desmarque en la configuración)
+  const lg = S.cfg.lgoShow !== false && logoSrc(), gl = S.cfg.gpsShow !== false;
   if(lg || gl) sh.insertAdjacentHTML("beforeend", `<div class="hdr">${lg ? `<img src="${logoSrc()}" alt="">` : ""}${gl ? `<img class="gps" src="${gpsLogoSrc()}" alt="GPS Chile">` : ""}</div>`);
   sh.insertAdjacentHTML("beforeend", `<div class="rule"><i></i></div>`);
   sh.dataset.rep = curRep;
